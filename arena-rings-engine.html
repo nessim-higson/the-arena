@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <title>ARENA / Ring Engine</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="build-version" content="v0.5">
+<meta name="build-date" content="2026-05-14">
 <style>
   :root {
     --bg: #000;
@@ -279,7 +284,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · v0.1</div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v0.5</span> · <span id="buildDate">14 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -414,7 +419,8 @@
     <div class="stage-meta">
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
-      <b id="meta-state">STATIC</b>
+      <b id="meta-state">STATIC</b><br>
+      <span style="opacity:0.45">BUILD v0.5</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
