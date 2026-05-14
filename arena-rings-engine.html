@@ -316,6 +316,19 @@
     </fieldset>
 
     <fieldset>
+      <legend>Band Profile</legend>
+      <div class="format-grid" id="bandProfileGrid" style="grid-template-columns:repeat(2,1fr)">
+        <button class="format-btn active" data-profile="UNIFORM">Uniform<span class="sub">all equal</span></button>
+        <button class="format-btn" data-profile="TAPER_OUT">Taper Out<span class="sub">thick →</span></button>
+        <button class="format-btn" data-profile="TAPER_IN">Taper In<span class="sub">← thick</span></button>
+        <button class="format-btn" data-profile="ALTERNATE">Alternate<span class="sub">thk / thn</span></button>
+        <button class="format-btn" data-profile="TIERED">Tiered<span class="sub">every 4th</span></button>
+        <button class="format-btn" data-profile="HOURGLASS">Hourglass<span class="sub">edges thick</span></button>
+      </div>
+      <div class="row" style="margin-top:10px"><label>Variation</label><span class="val" id="v-bandVar">0.50</span><input id="bandVar" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+    </fieldset>
+
+    <fieldset>
       <legend>Motion
         <span class="actions">
           <button class="btn tiny" id="allOn">All</button>
@@ -425,6 +438,8 @@
     bW: 160, bH: 90, bR: 18,
     bx: 5, by: 14,
     gx: 28, gy: 14, dRb: 6, dRg: 3,
+    bandProfile: "UNIFORM",
+    bandVar: 0.5,
     motion: {
       tilt:    { on: false, speed: 0.5, amount: 1.0 },   // amount = degrees per second multiplier
       breathe: { on: false, speed: 0.5, amount: 0.15 },  // amount = scale depth
@@ -455,19 +470,35 @@
     return `M${x+r},${y}H${x+w-r}A${r},${r} 0 0 1 ${x+w},${y+r}V${y+h-r}A${r},${r} 0 0 1 ${x+w-r},${y+h}H${x+r}A${r},${r} 0 0 1 ${x},${y+h-r}V${y+r}A${r},${r} 0 0 1 ${x+r},${y}Z`;
   }
 
+  // Per-ring band thickness scaling. Returns a multiplier (>0) for ring i's band.
+  function bandScale(i, N, profile, amount) {
+    if (!amount || profile === "UNIFORM") return 1;
+    const t = N > 1 ? i / (N - 1) : 0;  // 0 at innermost, 1 at outermost
+    let s = 1;
+    switch (profile) {
+      case "TAPER_OUT":  s = 1 + (t * 2 - 1) * amount; break;       // thin → thick going outward
+      case "TAPER_IN":   s = 1 + (1 - t * 2) * amount; break;       // thick → thin going outward
+      case "ALTERNATE":  s = 1 + (i % 2 === 0 ? -amount * 0.6 : amount * 0.9); break;
+      case "TIERED":     s = (i % 4 === 3) ? 1 + amount * 1.6 : 1 - amount * 0.45; break;
+      case "HOURGLASS":  s = 1 + amount * 0.8 * Math.cos(t * Math.PI); break; // edges thick, middle thin
+    }
+    return Math.max(0.15, s);
+  }
+
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Each step adds: 2*(bandX + gapX*curve^i) horizontally, 2*(bandY + gapY*curve^i) vertically,
-  // and (dRb + dRg*curve^i) to corner radius.
+  // Each step adds: 2*(bandX*bs_i + gapX*curve^i) horizontally, 2*(bandY*bs_i + gapY*curve^i) vertically,
+  // where bs_i is the band-thickness scale for ring i (per Band Profile).
   function computeRings(s) {
     const out = [];
     let w = s.bW, h = s.bH, r = s.bR;
-    out.push({ W: w, H: h, R: r });
+    out.push({ W: w, H: h, R: r, bs: bandScale(0, s.N, s.bandProfile, s.bandVar) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      w = w + 2 * (s.bx + s.gx * cf);
-      h = h + 2 * (s.by + s.gy * cf);
-      r = r + s.dRb + s.dRg * cf;
-      out.push({ W: w, H: h, R: r });
+      const bs = bandScale(i, s.N, s.bandProfile, s.bandVar);
+      w = w + 2 * (s.bx * bs + s.gx * cf);
+      h = h + 2 * (s.by * bs + s.gy * cf);
+      r = r + s.dRb * bs + s.dRg * cf;
+      out.push({ W: w, H: h, R: r, bs });
     }
     return out;
   }
@@ -642,7 +673,8 @@
       }
 
       const totalRot = markRot + drot;
-      const path = ringPath(morphedRing, state.bx, state.by, state.dRb);
+      const bs = ring.bs ?? 1;
+      const path = ringPath(morphedRing, state.bx * bs, state.by * bs, state.dRb * bs);
       const op = opacity < 0.999 ? ` opacity="${opacity.toFixed(3)}"` : "";
       svg += `<g transform="translate(${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}) rotate(${totalRot.toFixed(2)}) scale(${markScale.toFixed(4)})"${op}><path d="${path}" fill="${fg}" fill-rule="evenodd"/></g>`;
     }
@@ -769,6 +801,27 @@
   $("fH").addEventListener("input", () => {
     state.fH = parseInt($("fH").value);
     applyFormat();
+    render();
+  });
+
+  // ─── band profile
+  function syncBandProfileUI() {
+    document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.profile === state.bandProfile);
+    });
+    $("bandVar").value = state.bandVar;
+    $("v-bandVar").textContent = state.bandVar.toFixed(2);
+  }
+  document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.bandProfile = b.dataset.profile;
+      syncBandProfileUI();
+      render();
+    });
+  });
+  $("bandVar").addEventListener("input", () => {
+    state.bandVar = parseFloat($("bandVar").value);
+    $("v-bandVar").textContent = state.bandVar.toFixed(2);
     render();
   });
 
@@ -910,6 +963,7 @@
         fW: state.fW, fH: state.fH,
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
+        bp: state.bandProfile, bv: state.bandVar,
         bg: state.bg, fg: state.color,
         m: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [k, [v.on?1:0, v.speed, v.amount]]))
       };
@@ -923,6 +977,8 @@
     try {
       const obj = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
       ["fW","fH","N","px","py","rot","scale","curve","bW","bH","bR","bx","by","gx","gy"].forEach(k => { if (k in obj) state[k] = obj[k]; });
+      if (obj.bp) state.bandProfile = obj.bp;
+      if (typeof obj.bv === "number") state.bandVar = obj.bv;
       if (obj.bg) state.bg = obj.bg;
       if (obj.fg) state.color = obj.fg;
       if (obj.m) {
@@ -948,6 +1004,7 @@
     if (state.playing) togglePlay();
     state = DEFAULT_STATE();
     applyFormat();
+    syncBandProfileUI();
     syncAllSliders();
     buildMotionRows();
     location.hash = "";
@@ -969,6 +1026,7 @@
   // ─── init
   loadHash();
   applyFormat();
+  syncBandProfileUI();
   buildMotionRows();
   syncAllSliders();
   render();
