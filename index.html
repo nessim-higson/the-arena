@@ -161,8 +161,8 @@
     <div class="title">Ring <b>prototypes</b></div>
   </div>
   <div class="meta">
-    7 EXPERIMENTS<br>
-    <b>WORKING DIR · /arena/</b><br>
+    10 EXPERIMENTS<br>
+    <b>GITHUB · the-arena</b><br>
     GIT TRACKED
   </div>
 </header>
@@ -289,18 +289,81 @@
           </g>
         </svg>
       </div>
-      <div class="num">07 / LETTERS <span class="tag new">NEW</span></div>
+      <div class="num">07 / LETTERS</div>
       <div class="name">Letters from Rings</div>
       <div class="tagline">The mark becomes A · R · E · N · A.</div>
       <div class="desc">Four stadium primitives rearrange between six states: canonical mark + 5 letterforms. The ring band fills in as it morphs into a letter stroke. Same DNA, different conformations.</div>
       <div class="keys"><b>AUTO</b> CYCLE · <b>N</b> NEXT · <b>C</b> CANONICAL · <b>H</b> HUD</div>
     </a>
+
+    <a class="card" href="arena-rings-composer.html">
+      <div class="preview">
+        <svg viewBox="-50 -30 100 60" xmlns="http://www.w3.org/2000/svg">
+          <g fill="none" stroke="#fff" stroke-width="0.9">
+            <rect x="-44" y="-22" width="34" height="22" rx="5"/>
+            <rect x="-38" y="-18" width="22" height="14" rx="3"/>
+            <rect x="6" y="2" width="40" height="22" rx="6"/>
+            <rect x="14" y="6" width="24" height="14" rx="4"/>
+          </g>
+          <rect x="-46" y="-24" width="38" height="26" rx="5" fill="none" stroke="#ff3a1f" stroke-width="0.5" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
+      <div class="num">08 / COMPOSER <span class="tag new">NEW</span></div>
+      <div class="name">Multi-Mark Composer</div>
+      <div class="tagline">Per-ring controls + place multiple marks + URL sharing.</div>
+      <div class="desc">Composer canvas hosts N marks. Each mark has independent ring sliders (R1–R4 tabs), drag to position, click to select. URL hash captures the whole composition; localStorage Library saves named configs.</div>
+      <div class="keys"><b>N</b> ADD · <b>D</b> DUP · <b>DEL</b> REMOVE · <b>DRAG</b> MOVE</div>
+    </a>
+
+    <a class="card" href="arena-rings-generator.html">
+      <div class="preview">
+        <svg viewBox="-50 -30 100 60" xmlns="http://www.w3.org/2000/svg">
+          <g fill="none" stroke="#fff" stroke-width="0.8">
+            <rect x="-44" y="14" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="-26" y="10" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="-8" y="6" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="10" y="2" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="28" y="-2" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="-44" y="-2" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="-26" y="-6" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="-8" y="-10" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="10" y="-14" width="14" height="8" rx="2" transform="rotate(-12)"/>
+            <rect x="28" y="-18" width="14" height="8" rx="2" transform="rotate(-12)"/>
+          </g>
+        </svg>
+      </div>
+      <div class="num">09 / GENERATOR <span class="tag new">NEW</span></div>
+      <div class="name">Pattern Generator</div>
+      <div class="tagline">Parametric replicator: wave, trail, field, radial.</div>
+      <div class="desc">Tile the canonical mark across the canvas using four pattern modes — sine wave, linear-perspective trail, tessellated field, radial orbit. Each mode has its own slider schema. Optional opt-in motion. Freeze frame + export.</div>
+      <div class="keys"><b>SLIDERS</b> · <b>SPEED</b> · <b>FREEZE</b> · <b>EXPORT</b></div>
+    </a>
+
+    <a class="card" href="arena-rings-engine.html">
+      <div class="preview">
+        <svg viewBox="-50 -30 100 60" xmlns="http://www.w3.org/2000/svg">
+          <g fill="none" stroke="#fff" stroke-width="0.6" transform="rotate(25)">
+            <rect x="-46" y="-26" width="92" height="52" rx="10"/>
+            <rect x="-40" y="-22" width="80" height="44" rx="9"/>
+            <rect x="-34" y="-18" width="68" height="36" rx="8"/>
+            <rect x="-28" y="-14" width="56" height="28" rx="6"/>
+            <rect x="-22" y="-10" width="44" height="20" rx="5"/>
+            <rect x="-16" y="-6" width="32" height="12" rx="3"/>
+            <rect x="-10" y="-2" width="20" height="4" rx="2"/>
+          </g>
+        </svg>
+      </div>
+      <div class="num">10 / ENGINE <span class="tag new">NEW</span></div>
+      <div class="name">Ring Engine</div>
+      <div class="tagline">One mark, many rings (1–60), combinable motion + screensaver.</div>
+      <div class="desc">A single stack with ring count as the hero. Rotate, anchor off-canvas, adjust spacing curve. 8 motion behaviors (Tilt, Breathe, Cascade, Counter, Drift, Shift, Grow, Morph) — each toggle + speed, fully combinable. Auto-Cycle screensaver mode blends through 9 curated motion states.</div>
+      <div class="keys"><b>SLIDERS</b> · <b>MOTION TOGGLES</b> · <b>AUTO CYCLE</b> · <b>FREEZE</b></div>
+    </a>
   </div>
 
   <footer>
-    All keyboard shortcuts: <code>F</code> fullscreen · <code>H</code> hud · <code>SPACE</code> pause where applicable.<br>
-    Source: <code>/Users/nessimhigson/CLAUDE/projects/prototypes/arena/</code> · git tracked, every prototype = one commit.<br>
-    Roll back any prototype with <code>git checkout</code> against its tag.
+    Keyboard shortcuts (most prototypes): <code>F</code> fullscreen · <code>H</code> hud · <code>SPACE</code> pause.<br>
+    Source: <a href="https://github.com/nessim-higson/the-arena" style="color:#fff;text-decoration:none;border-bottom:1px solid #1f1f1f">github.com/nessim-higson/the-arena</a> · each prototype = one commit, every change auto-deploys.
   </footer>
 </main>
 </body>
