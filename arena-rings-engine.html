@@ -175,11 +175,45 @@
     transition: opacity 120ms;
   }
   svg#canvas {
-    width: min(96vw, calc(100vh * 1.78));
+    max-width: 96vw;
+    max-height: 92vh;
+    width: auto;
     height: auto;
+    aspect-ratio: var(--aspect, 1.778);
     display: block;
     z-index: 1;
   }
+  .format-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .format-btn {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 8px 0;
+    font: 600 9px/1 ui-monospace, monospace;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 80ms, background 80ms, color 80ms;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: center;
+  }
+  .format-btn .sub {
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    font-weight: 400;
+  }
+  .format-btn:hover { border-color: var(--muted); color: var(--fg); }
+  .format-btn.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .format-btn.active .sub { color: var(--bg); opacity: 0.7; }
   .stage-meta {
     position: absolute;
     top: 18px;
@@ -243,6 +277,20 @@
   <aside>
     <div class="brand">ARENA</div>
     <div class="sub">Ring Engine · v0.1</div>
+
+    <fieldset>
+      <legend>Format</legend>
+      <div class="format-grid" id="formatGrid">
+        <button class="format-btn active" data-width="1920" data-height="1080">16:9<span class="sub">1920×1080</span></button>
+        <button class="format-btn" data-width="1440" data-height="1440">1:1<span class="sub">1440²</span></button>
+        <button class="format-btn" data-width="1080" data-height="1920">9:16<span class="sub">1080×1920</span></button>
+        <button class="format-btn" data-width="3000" data-height="2000">3:2<span class="sub">3000×2000</span></button>
+        <button class="format-btn" data-width="2000" data-height="3000">2:3<span class="sub">2000×3000</span></button>
+        <button class="format-btn" data-width="2480" data-height="3508">A4<span class="sub">PRINT</span></button>
+      </div>
+      <div class="row"><label>Custom W</label><span class="val" id="v-fW">1920</span><input id="fW" type="range" min="540" max="6000" step="20" value="1920"></div>
+      <div class="row"><label>Custom H</label><span class="val" id="v-fH">1080</span><input id="fH" type="range" min="540" max="6000" step="20" value="1080"></div>
+    </fieldset>
 
     <fieldset>
       <legend>Stack
@@ -364,10 +412,11 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const VW = 1920, VH = 1080;
+  let VW = 1920, VH = 1080;
 
   // ─── state
   const DEFAULT_STATE = () => ({
+    fW: 1920, fH: 1080,
     N: 22,
     px: 0.5, py: 0.5,
     rot: 0,
@@ -687,6 +736,42 @@
     state.ssElapsed = 0;
   }
 
+  // ─── format
+  function applyFormat() {
+    VW = state.fW;
+    VH = state.fH;
+    const canvas = $("canvas");
+    canvas.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+    $("bg").setAttribute("width", VW);
+    $("bg").setAttribute("height", VH);
+    document.documentElement.style.setProperty("--aspect", (VW / VH).toFixed(4));
+    // update format buttons
+    document.querySelectorAll(".format-btn").forEach(b => {
+      b.classList.toggle("active", +b.dataset.width === VW && +b.dataset.height === VH);
+    });
+    // sync custom sliders
+    $("fW").value = VW; $("v-fW").textContent = VW;
+    $("fH").value = VH; $("v-fH").textContent = VH;
+  }
+  document.querySelectorAll(".format-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.fW = +b.dataset.width;
+      state.fH = +b.dataset.height;
+      applyFormat();
+      render();
+    });
+  });
+  $("fW").addEventListener("input", () => {
+    state.fW = parseInt($("fW").value);
+    applyFormat();
+    render();
+  });
+  $("fH").addEventListener("input", () => {
+    state.fH = parseInt($("fH").value);
+    applyFormat();
+    render();
+  });
+
   // ─── input bindings
   const STACK_KEYS = {
     N: "N", px: "px", py: "py", rot: "rot", scale: "scale", curve: "curve",
@@ -822,6 +907,7 @@
     clearTimeout(urlTimer);
     urlTimer = setTimeout(() => {
       const compact = {
+        fW: state.fW, fH: state.fH,
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
         bg: state.bg, fg: state.color,
@@ -836,7 +922,7 @@
     if (!m) return;
     try {
       const obj = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-      ["N","px","py","rot","scale","curve","bW","bH","bR","bx","by","gx","gy"].forEach(k => { if (k in obj) state[k] = obj[k]; });
+      ["fW","fH","N","px","py","rot","scale","curve","bW","bH","bR","bx","by","gx","gy"].forEach(k => { if (k in obj) state[k] = obj[k]; });
       if (obj.bg) state.bg = obj.bg;
       if (obj.fg) state.color = obj.fg;
       if (obj.m) {
@@ -861,6 +947,7 @@
   $("reseed").addEventListener("click", () => {
     if (state.playing) togglePlay();
     state = DEFAULT_STATE();
+    applyFormat();
     syncAllSliders();
     buildMotionRows();
     location.hash = "";
@@ -881,6 +968,7 @@
 
   // ─── init
   loadHash();
+  applyFormat();
   buildMotionRows();
   syncAllSliders();
   render();
