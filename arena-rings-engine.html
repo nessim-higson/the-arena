@@ -159,9 +159,12 @@
     position: relative;
     display: grid;
     place-items: center;
-    background: var(--stage-bg, #000);
+    background: #181818;
     overflow: hidden;
-    transition: background 180ms;
+  }
+  /* subtle frame around the canvas so the format is unmistakable on any bg */
+  svg#canvas {
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
   }
   #stage::before {
     content: "";
@@ -339,13 +342,13 @@
     </fieldset>
 
     <fieldset>
-      <legend>Screensaver
-        <span class="actions"><button class="btn tiny on" id="ssMode" style="display:none">·</button></span>
+      <legend>Motion Presets
+        <span class="actions"><button class="btn tiny" id="ssRandom">Random</button></span>
       </legend>
-      <div class="row"><label>State</label><span class="val" id="v-ssState">—</span></div>
-      <div class="btnrow">
+      <div class="preset-grid" id="ssStateGrid"></div>
+      <div class="btnrow" style="margin-top:8px">
         <button class="btn" id="ssToggle">Auto Cycle</button>
-        <button class="btn tiny" id="ssNext">Next State</button>
+        <button class="btn" id="motionsOff">Stop All</button>
       </div>
     </fieldset>
 
@@ -441,14 +444,14 @@
     bandProfile: "UNIFORM",
     bandVar: 0.5,
     motion: {
-      tilt:    { on: false, speed: 0.5, amount: 1.0 },   // amount = degrees per second multiplier
-      breathe: { on: false, speed: 0.5, amount: 0.15 },  // amount = scale depth
-      cascade: { on: false, speed: 0.5, amount: 18 },    // amount = rotation degrees
-      counter: { on: false, speed: 0.3, amount: 12 },    // amount = rot deg/sec
-      drift:   { on: false, speed: 0.4, amount: 0.15 },  // amount = position radius (0-1)
-      shift:   { on: false, speed: 0.5, amount: 24 },    // amount = pixels
-      grow:    { on: false, speed: 0.4, amount: 1.0 },
-      morph:   { on: false, speed: 0.4, amount: 0.20 }   // amount = ratio depth
+      tilt:    { on: false, speed: 0.5, amount: 1.0,  weight: 0 },
+      breathe: { on: false, speed: 0.5, amount: 0.15, weight: 0 },
+      cascade: { on: false, speed: 0.5, amount: 18,   weight: 0 },
+      counter: { on: false, speed: 0.3, amount: 12,   weight: 0 },
+      drift:   { on: false, speed: 0.4, amount: 0.15, weight: 0 },
+      shift:   { on: false, speed: 0.5, amount: 24,   weight: 0 },
+      grow:    { on: false, speed: 0.4, amount: 1.0,  weight: 0 },
+      morph:   { on: false, speed: 0.4, amount: 0.20, weight: 0 }
     },
     screensaver: false,
     ssStateIdx: 0,
@@ -585,11 +588,48 @@
     for (const m of MOTIONS) {
       const key = m.key;
       const target = s[key] || 0;
-      // Smoothly approach target speed; on/off by threshold
       const m_state = state.motion[key];
       m_state.speed += (target - m_state.speed) * blend;
-      m_state.on = m_state.speed > 0.04;
+      m_state.on = target > 0.04;  // gate by target, not current speed (smoother)
     }
+  }
+
+  // Apply a screensaver state directly (no blending) — used for button clicks
+  // and auto-play on load. Weight blending in the animation loop ensures smooth
+  // visual fade between motions, even though speed is set instantly.
+  function applySSStateInstant(idx) {
+    const s = SS_STATES[idx];
+    for (const m of MOTIONS) {
+      const target = s[m.key] || 0;
+      state.motion[m.key].speed = target;
+      state.motion[m.key].on = target > 0.04;
+    }
+    state.ssStateIdx = idx;
+    state.ssElapsed = 0;
+    syncMotionRowsUI();
+    syncSSStateUI();
+  }
+
+  function syncSSStateUI() {
+    document.querySelectorAll("#ssStateGrid [data-ss-idx]").forEach(b => {
+      b.classList.toggle("on", +b.dataset.ssIdx === state.ssStateIdx);
+    });
+  }
+
+  function buildSSStateGrid() {
+    const grid = $("ssStateGrid");
+    grid.innerHTML = "";
+    SS_STATES.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.dataset.ssIdx = i;
+      b.textContent = s.name;
+      b.addEventListener("click", () => {
+        applySSStateInstant(i);
+        if (!state.playing) togglePlay();
+      });
+      grid.appendChild(b);
+    });
   }
 
   // ─── render
@@ -597,80 +637,74 @@
   function render() {
     const t = state.timeAccum;
     const rings = computeRings(state);
-    // mark-level transforms (drift, tilt)
+    // motion weights (smooth fade in/out of each behavior)
+    const wTilt    = state.motion.tilt.weight;
+    const wBreathe = state.motion.breathe.weight;
+    const wCascade = state.motion.cascade.weight;
+    const wCounter = state.motion.counter.weight;
+    const wDrift   = state.motion.drift.weight;
+    const wShift   = state.motion.shift.weight;
+    const wGrow    = state.motion.grow.weight;
+    const wMorph   = state.motion.morph.weight;
+
+    // mark-level transforms — multiplied by their motion weight so disabling fades smoothly
     let cx = state.px * VW;
     let cy = state.py * VH;
-    if (state.motion.drift.on) {
-      const phase = t * state.motion.drift.speed * 0.5;
-      cx += Math.sin(phase) * 240 * state.motion.drift.amount;
-      cy += Math.cos(phase * 0.83) * 180 * state.motion.drift.amount;
-    }
-    let markRot = state.rot;
-    if (state.motion.tilt.on) {
-      markRot += t * state.motion.tilt.speed * 18;
-    }
-    let markScale = state.scale;
-    if (state.motion.breathe.on) {
-      const phase = t * state.motion.breathe.speed * 1.4;
-      markScale *= 1 + Math.sin(phase) * state.motion.breathe.amount;
-    }
-    // morph: aspect ratio / corner radius pulses
-    let morphRadius = 1, morphAspect = 1;
-    if (state.motion.morph.on) {
-      const phase = t * state.motion.morph.speed * 1.0;
-      morphRadius = 1 + Math.sin(phase) * state.motion.morph.amount;
-      morphAspect = 1 + Math.cos(phase * 0.7) * state.motion.morph.amount * 0.5;
-    }
+    const driftPhase = t * state.motion.drift.speed * 0.5;
+    cx += Math.sin(driftPhase) * 240 * state.motion.drift.amount * wDrift;
+    cy += Math.cos(driftPhase * 0.83) * 180 * state.motion.drift.amount * wDrift;
 
-    // grow offset: continuous shift of which ring index is rendered at each slot
-    let growOffset = 0;
-    if (state.motion.grow.on) {
-      growOffset = (t * state.motion.grow.speed * 0.4) % 1;
-    }
+    const markRot = state.rot + t * state.motion.tilt.speed * 18 * wTilt;
+    const breathePhase = t * state.motion.breathe.speed * 1.4;
+    const markScale = state.scale * (1 + Math.sin(breathePhase) * state.motion.breathe.amount * wBreathe);
+
+    const morphPhase = t * state.motion.morph.speed * 1.0;
+    const morphRadius = 1 + Math.sin(morphPhase) * state.motion.morph.amount * wMorph;
+    const morphAspect = 1 + Math.cos(morphPhase * 0.7) * state.motion.morph.amount * 0.5 * wMorph;
+
+    // grow offset weighted so disabling lets rings settle to their canonical positions
+    const growOffset = ((t * state.motion.grow.speed * 0.4) % 1) * wGrow;
 
     const fg = state.view.invert ? state.bg : state.color;
     const bg = state.view.invert ? state.color : state.bg;
     $("bg").setAttribute("fill", bg);
-    document.documentElement.style.setProperty("--stage-bg", bg);
     document.documentElement.style.setProperty("--grid-opacity", state.view.grid ? "1" : "0");
 
     let svg = "";
     for (let i = 0; i < rings.length; i++) {
       let ring = rings[i];
       let opacity = 1;
-      // GROW: render ring at effective fractional index (i + growOffset)
-      // The outermost (i = N-1) at full age fades out; the innermost (i = 0) at age 0 fades in.
-      if (state.motion.grow.on) {
+      if (wGrow > 0.001) {
         const effI = i + growOffset;
-        // compute interpolated ring size at effI
         ring = ringAtFloat(state, effI, rings);
-        if (effI > rings.length - 1) {
-          opacity = Math.max(0, rings.length - effI);
-        } else if (effI < 1) {
-          opacity = Math.max(0, effI);
+        if (effI > rings.length - 1) opacity = Math.max(0, rings.length - effI);
+        else if (effI < 1)           opacity = Math.max(0, effI);
+        // fade between non-grown and grown rendering by weight
+        if (wGrow < 1) {
+          const r0 = rings[i];
+          ring = {
+            W: r0.W + (ring.W - r0.W) * wGrow,
+            H: r0.H + (ring.H - r0.H) * wGrow,
+            R: r0.R + (ring.R - r0.R) * wGrow,
+            bs: r0.bs
+          };
+          opacity = 1 - (1 - opacity) * wGrow;
         }
       }
-      // morph apply
       const W = ring.W * (1 + (morphAspect - 1) * 0.5);
       const H = ring.H * (1 - (morphAspect - 1) * 0.5);
       const R = ring.R * morphRadius;
       const morphedRing = { W, H, R };
 
-      // per-ring motion
-      let dx = 0, dy = 0, drot = 0;
-      if (state.motion.shift.on) {
-        const phase = t * state.motion.shift.speed * 1.6 + i * 0.45;
-        dx = Math.sin(phase) * state.motion.shift.amount;
-        dy = Math.cos(phase + 0.6) * state.motion.shift.amount * 0.55;
-      }
-      if (state.motion.cascade.on) {
-        const phase = t * state.motion.cascade.speed * 2.1 + i * 0.55;
-        drot += Math.sin(phase) * state.motion.cascade.amount;
-      }
-      if (state.motion.counter.on) {
-        const sign = (i % 2 === 0) ? 1 : -1;
-        drot += sign * t * state.motion.counter.speed * state.motion.counter.amount * 1.4;
-      }
+      const shiftPhase = t * state.motion.shift.speed * 1.6 + i * 0.45;
+      const dx = Math.sin(shiftPhase) * state.motion.shift.amount * wShift;
+      const dy = Math.cos(shiftPhase + 0.6) * state.motion.shift.amount * 0.55 * wShift;
+
+      const cascadePhase = t * state.motion.cascade.speed * 2.1 + i * 0.55;
+      const cascadeRot = Math.sin(cascadePhase) * state.motion.cascade.amount * wCascade;
+      const counterSign = (i % 2 === 0) ? 1 : -1;
+      const counterRot  = counterSign * t * state.motion.counter.speed * state.motion.counter.amount * 1.4 * wCounter;
+      const drot = cascadeRot + counterRot;
 
       const totalRot = markRot + drot;
       const bs = ring.bs ?? 1;
@@ -684,7 +718,6 @@
     $("meta-N").textContent = state.N;
     $("meta-time").textContent = state.timeAccum.toFixed(1) + "s";
     $("meta-state").textContent = state.playing ? (state.screensaver ? "AUTO" : "MOTION") : "STATIC";
-    $("v-ssState").textContent = state.screensaver ? SS_STATES[state.ssStateIdx].name : "—";
     $("ssBanner").classList.toggle("on", state.screensaver);
     $("ssBannerName").textContent = SS_STATES[state.ssStateIdx].name;
 
@@ -723,23 +756,29 @@
   let rafId = null;
   let lastFrame = performance.now();
   function frame(now) {
+    const dt = Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    // always blend motion weights so toggling on/off is smooth (no spazz)
+    const k = 1 - Math.pow(0.86, dt * 60);
+    for (const key in state.motion) {
+      const m = state.motion[key];
+      const target = m.on ? 1 : 0;
+      m.weight += (target - m.weight) * k;
+    }
     if (state.playing) {
-      const dt = (now - lastFrame) / 1000;
       state.timeAccum += dt;
-      // screensaver auto-cycle
       if (state.screensaver) {
         state.ssElapsed += dt * 1000;
-        const blend = 0.06; // per-frame approach rate
-        applySSState(state.ssStateIdx, blend);
+        applySSState(state.ssStateIdx, k * 0.5);
         syncMotionRowsUI();
         if (state.ssElapsed > SS_STATE_DURATION_MS) {
           state.ssStateIdx = (state.ssStateIdx + 1) % SS_STATES.length;
           state.ssElapsed = 0;
+          syncSSStateUI();
         }
       }
-      lastFrame = now;
-      render();
     }
+    render();
     rafId = requestAnimationFrame(frame);
   }
   function togglePlay() {
@@ -763,10 +802,6 @@
     }
   }
 
-  function nextSSState() {
-    state.ssStateIdx = (state.ssStateIdx + 1) % SS_STATES.length;
-    state.ssElapsed = 0;
-  }
 
   // ─── format
   function applyFormat() {
@@ -863,7 +898,18 @@
     toast("FROZEN @ " + state.timeAccum.toFixed(1) + "s");
   });
   $("ssToggle").addEventListener("click", toggleScreensaver);
-  $("ssNext").addEventListener("click", nextSSState);
+  $("ssRandom").addEventListener("click", () => {
+    let i;
+    do { i = Math.floor(Math.random() * SS_STATES.length); } while (i === state.ssStateIdx && SS_STATES.length > 1);
+    applySSStateInstant(i);
+    if (!state.playing) togglePlay();
+    toast(SS_STATES[i].name);
+  });
+  $("motionsOff").addEventListener("click", () => {
+    for (const m of MOTIONS) state.motion[m.key].on = false;
+    syncMotionRowsUI();
+    if (state.screensaver) toggleScreensaver();
+  });
 
   $("allOn").addEventListener("click", () => {
     for (const m of MOTIONS) state.motion[m.key].on = true;
@@ -1007,6 +1053,7 @@
     syncBandProfileUI();
     syncAllSliders();
     buildMotionRows();
+    syncSSStateUI();
     location.hash = "";
     render();
     toast("RESET");
@@ -1024,11 +1071,21 @@
   }
 
   // ─── init
+  const fromURL = location.hash && location.hash.includes("e=");
   loadHash();
   applyFormat();
   syncBandProfileUI();
   buildMotionRows();
+  buildSSStateGrid();
   syncAllSliders();
+  // Auto-play with a random preset on fresh loads (skip if user opened a shared URL)
+  if (!fromURL) {
+    const randIdx = Math.floor(Math.random() * SS_STATES.length);
+    applySSStateInstant(randIdx);
+    state.playing = true;
+    $("playPause").textContent = "❚❚ Pause";
+  }
+  syncSSStateUI();
   render();
   requestAnimationFrame(now => { lastFrame = now; rafId = requestAnimationFrame(frame); });
 })();
