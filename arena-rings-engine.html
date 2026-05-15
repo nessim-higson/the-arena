@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build-version" content="v0.8"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
+<meta name="build-version" content="v0.9"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
 <meta name="build-date" content="2026-05-15">
 <style>
   :root {
@@ -224,10 +224,10 @@
   .format-btn.active .sub { color: var(--bg); opacity: 0.7; }
   /* mini ring-stack preview shown inside Band Profile buttons */
   .prof-icon {
-    width: 90%;
-    height: 36px;
+    width: 88%;
+    height: 48px;
     display: block;
-    margin-bottom: 4px;
+    margin: 2px auto 6px;
     color: var(--fg);
   }
   .format-btn.active .prof-icon { color: var(--bg); }
@@ -294,7 +294,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v0.8</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v0.9</span> · <span id="buildDate">15 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -430,7 +430,7 @@
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v0.8</span>
+      <span style="opacity:0.45">BUILD v0.9</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -493,69 +493,55 @@
     return `M${x+r},${y}H${x+w-r}A${r},${r} 0 0 1 ${x+w},${y+r}V${y+h-r}A${r},${r} 0 0 1 ${x+w-r},${y+h}H${x+r}A${r},${r} 0 0 1 ${x},${y+h-r}V${y+r}A${r},${r} 0 0 1 ${x+r},${y}Z`;
   }
 
-  // Per-ring profile shaping. Returns multipliers for ring i's band thickness,
-  // gap to next ring, and corner radius — so a profile reshapes the whole stack,
-  // not just the band stripes. Tuned ratios keep the look coherent (gap and
-  // radius vary less aggressively than band so the profile reads but the stack
-  // still hangs together).
-  function profileScale(i, N, profile, amount) {
-    if (!amount || profile === "UNIFORM") return { band: 1, gap: 1, radius: 1 };
-    const t = N > 1 ? i / (N - 1) : 0;  // 0 at innermost, 1 at outermost
-    let band = 1, gap = 1, radius = 1;
-    switch (profile) {
-      case "TAPER_OUT": {
-        const k = (t * 2 - 1) * amount;
-        band = 1 + k;          // outer thicker
-        gap  = 1 + k * 0.5;    // outer gap wider
-        radius = 1 + k * 0.4;  // outer corners more rounded
-        break;
+  // ─── Band Profile (zero-sum)
+  // Each profile defines a per-ring DELTA (positive = thicker, negative = thinner).
+  // We normalize so the deltas SUM TO ZERO across the stack — meaning the profile
+  // redistributes thickness rather than adding to it. Outer envelope stays roughly
+  // the same regardless of which profile you pick, so the mark stays in viewport.
+  function computeProfileDeltas(N, profile) {
+    const deltas = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = N > 1 ? i / (N - 1) : 0;  // 0 = innermost, 1 = outermost
+      let d = 0;
+      switch (profile) {
+        case "TAPER_OUT": d = (t * 2 - 1); break;                    // thin → thick outward
+        case "TAPER_IN":  d = (1 - t * 2); break;                    // thick → thin outward
+        case "ALTERNATE": d = (i % 2 === 0 ? -1 : 1); break;         // thk / thn / thk / thn
+        case "TIERED":    d = (i % 4 === 3 ? 1.5 : -0.5); break;     // every 4th hero
+        case "HOURGLASS": d = (Math.abs(t - 0.5) * 4 - 1); break;    // peak at edges, valley middle
       }
-      case "TAPER_IN": {
-        const k = (1 - t * 2) * amount;
-        band = 1 + k;
-        gap  = 1 + k * 0.5;
-        radius = 1 + k * 0.4;
-        break;
-      }
-      case "ALTERNATE": {
-        const alt = (i % 2 === 0 ? -amount * 0.6 : amount * 0.9);
-        band = 1 + alt;
-        gap  = 1 + alt * 0.4;
-        radius = 1 + alt * 0.7;
-        break;
-      }
-      case "TIERED": {
-        const tier = (i % 4 === 3) ? amount * 1.6 : -amount * 0.45;
-        band = 1 + tier;
-        gap  = 1 + tier * 0.5;
-        radius = 1 + tier * 0.9;
-        break;
-      }
-      case "HOURGLASS": {
-        const hg = amount * 0.8 * Math.cos(t * Math.PI);
-        band = 1 + hg;
-        gap  = 1 + hg * 0.6;
-        radius = 1 + hg * 0.5;
-        break;
-      }
+      deltas[i] = d;
     }
+    // Zero-mean normalize so cumulative stack growth ≈ Uniform case.
+    let mean = 0;
+    for (let i = 0; i < N; i++) mean += deltas[i];
+    mean /= N;
+    for (let i = 0; i < N; i++) deltas[i] -= mean;
+    return deltas;
+  }
+
+  // Turn a normalized delta into multipliers for band / gap / radius.
+  // Tuned amplitudes (0.6 / 0.25 / 0.4) so even at full variation, the stack
+  // remains coherent and stays inside the canvas.
+  function profileFromDelta(delta, amount) {
+    const k = delta * amount;
     return {
-      band:   Math.max(0.15, band),
-      gap:    Math.max(0.15, gap),
-      radius: Math.max(0.15, radius)
+      band:   Math.max(0.2, 1 + k * 0.6),
+      gap:    Math.max(0.2, 1 + k * 0.25),
+      radius: Math.max(0.2, 1 + k * 0.4)
     };
   }
 
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Each ring's band thickness, gap to next ring, and corner radius are all
-  // shaped by the Band Profile (via profileScale).
+  // Per-ring band / gap / radius are shaped by the (zero-sum) Band Profile.
   function computeRings(s) {
+    const deltas = computeProfileDeltas(s.N, s.bandProfile);
     const out = [];
     let w = s.bW, h = s.bH, r = s.bR;
-    out.push({ W: w, H: h, R: r, ps: profileScale(0, s.N, s.bandProfile, s.bandVar) });
+    out.push({ W: w, H: h, R: r, ps: profileFromDelta(deltas[0], s.bandVar) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      const ps = profileScale(i, s.N, s.bandProfile, s.bandVar);
+      const ps = profileFromDelta(deltas[i], s.bandVar);
       w = w + 2 * (s.bx * ps.band + s.gx * ps.gap * cf);
       h = h + 2 * (s.by * ps.band + s.gy * ps.gap * cf);
       r = r + (s.dRb * ps.band + s.dRg * ps.gap * cf) * ps.radius;
@@ -932,17 +918,19 @@
   });
 
   // ─── band profile
-  // Mini ring-stack preview for each profile button. Uses the same profileScale
-  // logic as the engine itself, so the icon shows exactly how that profile
-  // shapes a stack — at a representative variation (0.75) so the character reads.
-  function buildProfilePreviewSVG(profile, amount = 0.75) {
-    const N = 5;
-    const cfg = { bW: 8, bH: 4, bR: 1, bx: 0.4, by: 0.85, dRb: 0.4, gx: 1.4, gy: 0.7, dRg: 0.2 };
+  // Mini ring-stack preview for each profile button. Uses the same zero-sum
+  // profile logic as the engine, so the icon is a true miniature of what
+  // clicking the profile does to the main canvas — at a representative
+  // variation (0.85) so the character reads cleanly at icon size.
+  function buildProfilePreviewSVG(profile, amount = 0.85) {
+    const N = 7;
+    const cfg = { bW: 6, bH: 3, bR: 0.8, bx: 0.35, by: 0.85, dRb: 0.35, gx: 1.2, gy: 0.55, dRg: 0.15 };
+    const deltas = computeProfileDeltas(N, profile);
     const rings = [];
     let w = cfg.bW, h = cfg.bH, r = cfg.bR;
-    rings.push({ w, h, r, ps: profileScale(0, N, profile, amount) });
+    rings.push({ w, h, r, ps: profileFromDelta(deltas[0], amount) });
     for (let i = 1; i < N; i++) {
-      const ps = profileScale(i, N, profile, amount);
+      const ps = profileFromDelta(deltas[i], amount);
       w = w + 2 * (cfg.bx * ps.band + cfg.gx * ps.gap);
       h = h + 2 * (cfg.by * ps.band + cfg.gy * ps.gap);
       r = r + (cfg.dRb * ps.band + cfg.dRg * ps.gap) * ps.radius;
