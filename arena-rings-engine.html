@@ -417,7 +417,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.11</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.12</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -462,6 +462,10 @@
         <button class="fit-btn" data-fit="TIGHT" title="Every ring stays inside the canvas">Tight</button>
         <button class="fit-btn active" data-fit="AUTO" title="Shrink only if too big; off-center can overflow">Auto</button>
         <button class="fit-btn" data-fit="LOOSE" title="No clamping — rings fly beyond the canvas">Loose</button>
+      </div>
+      <div class="row"><label>Lock Rotation</label><span class="val" id="v-lockRot">OFF</span></div>
+      <div class="fit-grid" style="grid-template-columns:1fr">
+        <button class="fit-btn" id="lockRotBtn" title="Pins rotation at 0 and disables tilt / counter / cascade motions">↻ Lock Rotation</button>
       </div>
       <div class="row"><label>Echo From</label><span class="val" id="v-anchorMode">●</span></div>
       <div class="pos-grid" id="anchorGrid">
@@ -631,7 +635,8 @@
     gx: 76, gy: 22, dRg: 3.8,
     bandProfile: "UNIFORM", bandVar: 0,
     anchorMode: "CENTER",
-    fitMode: "AUTO"
+    fitMode: "AUTO",
+    lockRotation: false
   };
 
   const DEFAULT_STATE = () => ({
@@ -647,13 +652,11 @@
     bandProfile: "UNIFORM",
     bandVar: 0.5,
     anchorMode: "CENTER",
-    // Fit mode: how the mark relates to the viewport edges.
-    //   TIGHT  — composition fits entirely inside the canvas (with anchor
-    //            offset and position fully accounted for, no overflow at all)
-    //   AUTO   — shrink only if the outermost ring exceeds canvas size;
-    //            overflow allowed when caused by off-center position
-    //   LOOSE  — never shrink; rings can extend dramatically beyond canvas
     fitMode: "AUTO",
+    // When true: rotation locked at 0, slider disabled, and rotational motion
+    // behaviors (TILT / COUNTER / CASCADE) auto-off. For "calm, anchored" looks
+    // where the rings stay upright.
+    lockRotation: false,
     motion: {
       // accRot fields accumulate rotation only while weight > 0; phases free-run.
       // This decouples each motion's internal time from the global timeAccum,
@@ -1391,6 +1394,7 @@
     if (typeof syncPosGrid === "function") syncPosGrid();
     if (typeof syncAnchorGrid === "function") syncAnchorGrid();
     if (typeof syncFitGrid === "function") syncFitGrid();
+    if (typeof syncLockRot === "function") syncLockRot();
   }
 
   // ─── export
@@ -1424,7 +1428,7 @@
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
         bp: state.bandProfile, bv: state.bandVar,
-        am: state.anchorMode, fm: state.fitMode,
+        am: state.anchorMode, fm: state.fitMode, lr: state.lockRotation ? 1 : 0,
         bg: state.bg, fg: state.color,
         m: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [k, [v.on?1:0, v.speed, v.amount]]))
       };
@@ -1442,6 +1446,7 @@
       if (typeof obj.bv === "number") state.bandVar = obj.bv;
       if (obj.am) state.anchorMode = obj.am;
       if (obj.fm) state.fitMode = obj.fm;
+      if (typeof obj.lr === "number") state.lockRotation = !!obj.lr;
       if (obj.bg) state.bg = obj.bg;
       if (obj.fg) state.color = obj.fg;
       if (obj.m) {
@@ -1516,17 +1521,40 @@
 
   // ─── fit-mode trio (TIGHT / AUTO / LOOSE)
   function syncFitGrid() {
-    document.querySelectorAll(".fit-btn").forEach(b => {
+    document.querySelectorAll("#fitGrid .fit-btn").forEach(b => {
       b.classList.toggle("active", b.dataset.fit === (state.fitMode || "AUTO"));
     });
     $("v-fitMode").textContent = state.fitMode || "AUTO";
   }
-  document.querySelectorAll(".fit-btn").forEach(b => {
+  document.querySelectorAll("#fitGrid .fit-btn").forEach(b => {
     b.addEventListener("click", () => {
       state.fitMode = b.dataset.fit;
       syncFitGrid();
       render();
     });
+  });
+
+  // ─── Lock Rotation toggle
+  function syncLockRot() {
+    const on = !!state.lockRotation;
+    $("lockRotBtn").classList.toggle("active", on);
+    $("v-lockRot").textContent = on ? "ON" : "OFF";
+    $("rot").disabled = on;
+    if (on) {
+      state.rot = 0;
+      $("rot").value = 0;
+      $("v-rot").textContent = "0";
+      // Disable rotational motion behaviors so the lock is real.
+      for (const k of ["tilt", "counter", "cascade"]) {
+        if (state.motion[k].on) state.motion[k].on = false;
+      }
+      syncMotionRowsUI();
+    }
+  }
+  $("lockRotBtn").addEventListener("click", () => {
+    state.lockRotation = !state.lockRotation;
+    syncLockRot();
+    render();
   });
 
   // ─── anchor grid (Echo From — which point of each ring sits at the anchor)
@@ -1599,9 +1627,11 @@
     state.curve = CANONICAL_BRAND.curve;
     state.anchorMode = CANONICAL_BRAND.anchorMode;
     state.fitMode = CANONICAL_BRAND.fitMode;
+    state.lockRotation = CANONICAL_BRAND.lockRotation;
     syncAllSliders();
     syncAnchorGrid();
     syncFitGrid();
+    syncLockRot();
     render();
   }
   function resetAnchor() {
@@ -1778,15 +1808,27 @@
       motions: ["TILT", "MORPH PULSE", "BREATH"]
     },
     {
-      name: "TIGHT CONTAIN",  // ★ NEW: every ring guaranteed inside the canvas
-      weight: 0.07,
+      name: "TIGHT CONTAIN",  // ★ every ring guaranteed inside the canvas
+      weight: 0.06,
       N: [8, 24],
       bx: [4, 10], by: [10, 24], gx: [30, 70], gy: [14, 32],
-      scale: [2.0, 4.5],       // can target big, TIGHT clamps to fit
+      scale: [2.0, 4.5],
       anchorAspect: "any",
       positions: "center-heavy",
       fitMode: "TIGHT",
       motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
+    },
+    {
+      name: "GROUNDED",       // ★ NEW: no rotation, TIGHT fit, balanced scale
+      weight: 0.10,            //   matches reference image's "calm, anchored" feel
+      N: [10, 20],
+      bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
+      scale: [2.4, 3.8],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      fitMode: "TIGHT",
+      lockRotation: true,      // forces rot=0 and disables rotational motion
+      motions: ["BREATH", "MORPH PULSE"]
     },
     {
       name: "EXPLOSION",
@@ -1863,9 +1905,12 @@
 
     // Stack
     state.N = randInt(mood.N[0], mood.N[1]);
-    state.rot = rand(-30, 30);
+    // Respect lockRotation: when on, randomize never picks rotation.
+    state.rot = state.lockRotation ? 0 : (mood.lockRotation ? 0 : rand(-30, 30));
     state.scale = rand(mood.scale[0], mood.scale[1]);
     state.curve = rand(0.92, 1.10);
+    // Mood can force lockRotation on (e.g. GROUNDED).
+    if (mood.lockRotation) state.lockRotation = true;
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
     if (mood.layout === "corner-emergence") {
