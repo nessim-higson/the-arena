@@ -7,8 +7,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build-version" content="v0.5">
-<meta name="build-date" content="2026-05-14">
+<meta name="build-version" content="v0.6">
+<meta name="build-date" content="2026-05-15">
 <style>
   :root {
     --bg: #000;
@@ -284,7 +284,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v0.5</span> · <span id="buildDate">14 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v0.6</span> · <span id="buildDate">15 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -420,7 +420,7 @@
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v0.5</span>
+      <span style="opacity:0.45">BUILD v0.6</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -450,14 +450,18 @@
     bandProfile: "UNIFORM",
     bandVar: 0.5,
     motion: {
-      tilt:    { on: false, speed: 0.5, amount: 1.0,  weight: 0 },
-      breathe: { on: false, speed: 0.5, amount: 0.15, weight: 0 },
-      cascade: { on: false, speed: 0.5, amount: 18,   weight: 0 },
-      counter: { on: false, speed: 0.3, amount: 12,   weight: 0 },
-      drift:   { on: false, speed: 0.4, amount: 0.15, weight: 0 },
-      shift:   { on: false, speed: 0.5, amount: 24,   weight: 0 },
-      grow:    { on: false, speed: 0.4, amount: 1.0,  weight: 0 },
-      morph:   { on: false, speed: 0.4, amount: 0.20, weight: 0 }
+      // accRot fields accumulate rotation only while weight > 0; phases free-run.
+      // This decouples each motion's internal time from the global timeAccum,
+      // so changing speed mid-flight just changes the future rate (no phase jump)
+      // and toggling off freezes the visible state (no unwind).
+      tilt:    { on: false, speed: 0.5, amount: 1.0,  weight: 0, accRot: 0 },
+      breathe: { on: false, speed: 0.5, amount: 0.15, weight: 0, phase: 0 },
+      cascade: { on: false, speed: 0.5, amount: 18,   weight: 0, phase: 0 },
+      counter: { on: false, speed: 0.3, amount: 12,   weight: 0, accRot: 0 },
+      drift:   { on: false, speed: 0.4, amount: 0.15, weight: 0, phase: 0 },
+      shift:   { on: false, speed: 0.5, amount: 24,   weight: 0, phase: 0 },
+      grow:    { on: false, speed: 0.4, amount: 1.0,  weight: 0, phase: 0 },
+      morph:   { on: false, speed: 0.4, amount: 0.20, weight: 0, phase: 0 }
     },
     screensaver: false,
     ssStateIdx: 0,
@@ -641,7 +645,6 @@
   // ─── render
   const root = $("root");
   function render() {
-    const t = state.timeAccum;
     const rings = computeRings(state);
     // motion weights (smooth fade in/out of each behavior)
     const wTilt    = state.motion.tilt.weight;
@@ -653,23 +656,27 @@
     const wGrow    = state.motion.grow.weight;
     const wMorph   = state.motion.morph.weight;
 
-    // mark-level transforms — multiplied by their motion weight so disabling fades smoothly
+    // Drift uses a free-running phase: position is sin(phase) * amount * weight.
+    // When weight drops, the mark glides smoothly back to its base position.
     let cx = state.px * VW;
     let cy = state.py * VH;
-    const driftPhase = t * state.motion.drift.speed * 0.5;
+    const driftPhase = state.motion.drift.phase;
     cx += Math.sin(driftPhase) * 240 * state.motion.drift.amount * wDrift;
     cy += Math.cos(driftPhase * 0.83) * 180 * state.motion.drift.amount * wDrift;
 
-    const markRot = state.rot + t * state.motion.tilt.speed * 18 * wTilt;
-    const breathePhase = t * state.motion.breathe.speed * 1.4;
-    const markScale = state.scale * (1 + Math.sin(breathePhase) * state.motion.breathe.amount * wBreathe);
+    // Tilt uses accumulated rotation, not "time × speed × weight". This means
+    // disabling tilt freezes the current rotation (no unwind back to 0).
+    const markRot = state.rot + state.motion.tilt.accRot;
 
-    const morphPhase = t * state.motion.morph.speed * 1.0;
+    // Breathe uses free-running phase too — speed changes don't cause phase jumps.
+    const markScale = state.scale * (1 + Math.sin(state.motion.breathe.phase) * state.motion.breathe.amount * wBreathe);
+
+    const morphPhase = state.motion.morph.phase;
     const morphRadius = 1 + Math.sin(morphPhase) * state.motion.morph.amount * wMorph;
     const morphAspect = 1 + Math.cos(morphPhase * 0.7) * state.motion.morph.amount * 0.5 * wMorph;
 
     // grow offset weighted so disabling lets rings settle to their canonical positions
-    const growOffset = ((t * state.motion.grow.speed * 0.4) % 1) * wGrow;
+    const growOffset = (state.motion.grow.phase % 1) * wGrow;
 
     const fg = state.view.invert ? state.bg : state.color;
     const bg = state.view.invert ? state.color : state.bg;
@@ -702,14 +709,16 @@
       const R = ring.R * morphRadius;
       const morphedRing = { W, H, R };
 
-      const shiftPhase = t * state.motion.shift.speed * 1.6 + i * 0.45;
+      // Per-ring phase offsets read from each motion's free-running phase.
+      const shiftPhase = state.motion.shift.phase + i * 0.45;
       const dx = Math.sin(shiftPhase) * state.motion.shift.amount * wShift;
       const dy = Math.cos(shiftPhase + 0.6) * state.motion.shift.amount * 0.55 * wShift;
 
-      const cascadePhase = t * state.motion.cascade.speed * 2.1 + i * 0.55;
+      const cascadePhase = state.motion.cascade.phase + i * 0.55;
       const cascadeRot = Math.sin(cascadePhase) * state.motion.cascade.amount * wCascade;
+      // Counter uses accumulated rotation, signed per ring index — freezes on toggle off.
       const counterSign = (i % 2 === 0) ? 1 : -1;
-      const counterRot  = counterSign * t * state.motion.counter.speed * state.motion.counter.amount * 1.4 * wCounter;
+      const counterRot  = counterSign * state.motion.counter.accRot;
       const drot = cascadeRot + counterRot;
 
       const totalRot = markRot + drot;
@@ -761,11 +770,17 @@
   // ─── animation loop
   let rafId = null;
   let lastFrame = performance.now();
+  // Per-motion phase frequency factors (used to be inline as t * speed * X).
+  // Free-running phases (advance regardless of weight) so the wave's underlying
+  // rhythm stays coherent. Speed-rate accumulators (tilt, counter) only advance
+  // when weight > 0 so disabling freezes the visible rotation rather than unwinding it.
+  const PHASE_RATE = { breathe: 1.4, cascade: 2.1, drift: 0.5, shift: 1.6, grow: 0.4, morph: 1.0 };
+
   function frame(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000);
     lastFrame = now;
-    // always blend motion weights so toggling on/off is smooth (no spazz)
-    const k = 1 - Math.pow(0.86, dt * 60);
+    // Weight blending: gentler (10% per frame at 60fps) — fluid handoff, not snappy.
+    const k = 1 - Math.pow(0.90, dt * 60);
     for (const key in state.motion) {
       const m = state.motion[key];
       const target = m.on ? 1 : 0;
@@ -773,6 +788,18 @@
     }
     if (state.playing) {
       state.timeAccum += dt;
+      // Advance each oscillator's phase at its own rate.
+      // These are free-running so amplitude (driven by weight) is the only thing that
+      // changes when toggling — no phase discontinuity, no rate jumps from preset changes.
+      for (const key in PHASE_RATE) {
+        state.motion[key].phase += dt * state.motion[key].speed * PHASE_RATE[key];
+      }
+      // Tilt + counter accumulate rotation while their weight is high.
+      // When weight drops to 0, accumulation stops — rotation freezes in place.
+      // When weight rises again, accumulation resumes from where it stopped.
+      state.motion.tilt.accRot    += dt * state.motion.tilt.speed * 18 * state.motion.tilt.weight;
+      state.motion.counter.accRot += dt * state.motion.counter.speed * state.motion.counter.amount * 1.4 * state.motion.counter.weight;
+
       if (state.screensaver) {
         state.ssElapsed += dt * 1000;
         applySSState(state.ssStateIdx, k * 0.5);
