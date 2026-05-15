@@ -79,23 +79,25 @@
   fieldset.collapsible > legend {
     font-weight: 700;
     color: var(--fg);
-    font-size: 10.5px;
+    font-size: 11px;
     letter-spacing: 0.24em;
-    background: rgba(255,255,255,0.08);
-    padding: 14px 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.06));
+    padding: 16px 14px;
     margin: 0 -18px;
     cursor: pointer;
     user-select: none;
     transition: background 100ms, color 100ms, border-left-color 100ms;
-    border-left: 2px solid var(--accent);
+    border-left: 3px solid var(--accent);
+    border-bottom: 1px solid rgba(0,0,0,0.45);
   }
   fieldset.collapsible.collapsed > legend {
-    background: rgba(255,255,255,0.05);
-    color: #d8d8d8;
-    border-left-color: transparent;
+    background: rgba(255,255,255,0.045);
+    color: #c8c8c8;
+    border-left-color: rgba(255,255,255,0.18);
+    border-bottom-color: transparent;
   }
   fieldset.collapsible > legend:hover {
-    background: rgba(255,255,255,0.13);
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.10));
     color: var(--fg);
     border-left-color: var(--accent);
   }
@@ -108,15 +110,17 @@
   fieldset.collapsible > legend::before {
     content: "▾";
     display: inline-block;
-    width: 14px;
-    margin-right: 8px;
-    font-size: 11px;
-    opacity: 0.9;
+    width: 16px;
+    margin-right: 10px;
+    font-size: 13px;
+    opacity: 1;
+    color: var(--accent);
     transition: transform 120ms;
   }
   fieldset.collapsible.collapsed > legend::before {
     content: "▸";
-    opacity: 0.7;
+    opacity: 0.85;
+    color: inherit;
   }
   .row {
     display: grid;
@@ -225,7 +229,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
-    margin: 0 0 22px;
+    margin: 0 0 6px;
+  }
+  .header-actions:last-of-type {
+    margin-bottom: 22px;
   }
   .header-btn {
     display: block;
@@ -417,10 +424,14 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.13</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.14</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
+    </div>
+    <div class="header-actions">
+      <button class="header-btn" id="modeCentered" title="Calm upright composition — no rotation, fits inside canvas">⊕ Centered</button>
+      <button class="header-btn" id="modeRotated" title="Tilted composition — fits inside canvas with rotation">⊗ Rotated</button>
     </div>
 
     <fieldset class="collapsible collapsed">
@@ -1826,16 +1837,28 @@
       motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
     },
     {
-      name: "GROUNDED",       // ★ NEW: no rotation, TIGHT fit, balanced scale
-      weight: 0.10,            //   matches reference image's "calm, anchored" feel
+      name: "CENTERED",       // ★ exposed as top-level button. Calm upright
+      weight: 0.05,            //   composition: no rotation, TIGHT fit, calm scale.
       N: [10, 20],
       bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
       scale: [2.4, 3.8],
       anchorAspect: "any",
       positions: "center-heavy",
       fitMode: "TIGHT",
-      lockRotation: true,      // forces rot=0 and disables rotational motion
+      lockRotation: true,
       motions: ["BREATH", "MORPH PULSE"]
+    },
+    {
+      name: "ROTATED",        // ★ exposed as top-level button. Tilted but TIGHT.
+      weight: 0.05,
+      N: [10, 20],
+      bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
+      scale: [2.2, 3.6],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      fitMode: "TIGHT",
+      rotRange: [18, 38],      // pick a notable angle in this range (sign random)
+      motions: ["TILT", "BREATH", "MORPH PULSE"]
     },
     {
       name: "EXPLOSION",
@@ -1917,11 +1940,21 @@
 
     // Stack
     state.N = randInt(mood.N[0], mood.N[1]);
-    // Respect lockRotation: when on, randomize never picks rotation.
-    state.rot = state.lockRotation ? 0 : (mood.lockRotation ? 0 : rand(-30, 30));
+    // Rotation logic: lockRotation always wins. Otherwise mood.lockRotation forces 0.
+    // mood.rotRange picks a notable angle (e.g. ROTATED). Default = -30 to 30.
+    if (state.lockRotation) {
+      state.rot = 0;
+    } else if (mood.lockRotation) {
+      state.rot = 0;
+    } else if (mood.rotRange) {
+      const sign = Math.random() < 0.5 ? -1 : 1;
+      state.rot = sign * rand(mood.rotRange[0], mood.rotRange[1]);
+    } else {
+      state.rot = rand(-30, 30);
+    }
     state.scale = rand(mood.scale[0], mood.scale[1]);
     state.curve = rand(0.92, 1.10);
-    // Mood can force lockRotation on (e.g. GROUNDED).
+    // Mood can force lockRotation on (e.g. CENTERED).
     if (mood.lockRotation) state.lockRotation = true;
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
@@ -1994,6 +2027,9 @@
     return mood;
   }
   $("randomizeAll").addEventListener("click", () => applyMoodFully());
+  // Exposed mode buttons — direct shortcuts to the two "calm and contained" looks.
+  $("modeCentered").addEventListener("click", () => applyMoodFully("CENTERED"));
+  $("modeRotated").addEventListener("click", () => applyMoodFully("ROTATED"));
 
   // ─── Mood grid (every named mood as a clickable preset)
   function buildMoodGrid() {
