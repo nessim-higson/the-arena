@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build-version" content="v0.6">
+<meta name="build-version" content="v0.7"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
 <meta name="build-date" content="2026-05-15">
 <style>
   :root {
@@ -284,7 +284,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v0.6</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v0.7</span> · <span id="buildDate">15 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -420,7 +420,7 @@
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v0.6</span>
+      <span style="opacity:0.45">BUILD v0.7</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -454,14 +454,14 @@
       // This decouples each motion's internal time from the global timeAccum,
       // so changing speed mid-flight just changes the future rate (no phase jump)
       // and toggling off freezes the visible state (no unwind).
-      tilt:    { on: false, speed: 0.5, amount: 1.0,  weight: 0, accRot: 0 },
-      breathe: { on: false, speed: 0.5, amount: 0.15, weight: 0, phase: 0 },
-      cascade: { on: false, speed: 0.5, amount: 18,   weight: 0, phase: 0 },
-      counter: { on: false, speed: 0.3, amount: 12,   weight: 0, accRot: 0 },
-      drift:   { on: false, speed: 0.4, amount: 0.15, weight: 0, phase: 0 },
-      shift:   { on: false, speed: 0.5, amount: 24,   weight: 0, phase: 0 },
-      grow:    { on: false, speed: 0.4, amount: 1.0,  weight: 0, phase: 0 },
-      morph:   { on: false, speed: 0.4, amount: 0.20, weight: 0, phase: 0 }
+      tilt:    { on: false, speed: 0.6, amount: 1.0,  weight: 0, accRot: 0 },
+      breathe: { on: false, speed: 0.5, amount: 0.22, weight: 0, phase: 0 },
+      cascade: { on: false, speed: 0.5, amount: 26,   weight: 0, phase: 0 },
+      counter: { on: false, speed: 0.35,amount: 18,   weight: 0, accRot: 0 },
+      drift:   { on: false, speed: 0.4, amount: 0.20, weight: 0, phase: 0 },
+      shift:   { on: false, speed: 0.5, amount: 38,   weight: 0, phase: 0 },
+      grow:    { on: false, speed: 0.5, amount: 1.0,  weight: 0, phase: 0 },
+      morph:   { on: false, speed: 0.4, amount: 0.30, weight: 0, phase: 0 }
     },
     screensaver: false,
     ssStateIdx: 0,
@@ -483,35 +483,73 @@
     return `M${x+r},${y}H${x+w-r}A${r},${r} 0 0 1 ${x+w},${y+r}V${y+h-r}A${r},${r} 0 0 1 ${x+w-r},${y+h}H${x+r}A${r},${r} 0 0 1 ${x},${y+h-r}V${y+r}A${r},${r} 0 0 1 ${x+r},${y}Z`;
   }
 
-  // Per-ring band thickness scaling. Returns a multiplier (>0) for ring i's band.
-  function bandScale(i, N, profile, amount) {
-    if (!amount || profile === "UNIFORM") return 1;
+  // Per-ring profile shaping. Returns multipliers for ring i's band thickness,
+  // gap to next ring, and corner radius — so a profile reshapes the whole stack,
+  // not just the band stripes. Tuned ratios keep the look coherent (gap and
+  // radius vary less aggressively than band so the profile reads but the stack
+  // still hangs together).
+  function profileScale(i, N, profile, amount) {
+    if (!amount || profile === "UNIFORM") return { band: 1, gap: 1, radius: 1 };
     const t = N > 1 ? i / (N - 1) : 0;  // 0 at innermost, 1 at outermost
-    let s = 1;
+    let band = 1, gap = 1, radius = 1;
     switch (profile) {
-      case "TAPER_OUT":  s = 1 + (t * 2 - 1) * amount; break;       // thin → thick going outward
-      case "TAPER_IN":   s = 1 + (1 - t * 2) * amount; break;       // thick → thin going outward
-      case "ALTERNATE":  s = 1 + (i % 2 === 0 ? -amount * 0.6 : amount * 0.9); break;
-      case "TIERED":     s = (i % 4 === 3) ? 1 + amount * 1.6 : 1 - amount * 0.45; break;
-      case "HOURGLASS":  s = 1 + amount * 0.8 * Math.cos(t * Math.PI); break; // edges thick, middle thin
+      case "TAPER_OUT": {
+        const k = (t * 2 - 1) * amount;
+        band = 1 + k;          // outer thicker
+        gap  = 1 + k * 0.5;    // outer gap wider
+        radius = 1 + k * 0.4;  // outer corners more rounded
+        break;
+      }
+      case "TAPER_IN": {
+        const k = (1 - t * 2) * amount;
+        band = 1 + k;
+        gap  = 1 + k * 0.5;
+        radius = 1 + k * 0.4;
+        break;
+      }
+      case "ALTERNATE": {
+        const alt = (i % 2 === 0 ? -amount * 0.6 : amount * 0.9);
+        band = 1 + alt;
+        gap  = 1 + alt * 0.4;
+        radius = 1 + alt * 0.7;
+        break;
+      }
+      case "TIERED": {
+        const tier = (i % 4 === 3) ? amount * 1.6 : -amount * 0.45;
+        band = 1 + tier;
+        gap  = 1 + tier * 0.5;
+        radius = 1 + tier * 0.9;
+        break;
+      }
+      case "HOURGLASS": {
+        const hg = amount * 0.8 * Math.cos(t * Math.PI);
+        band = 1 + hg;
+        gap  = 1 + hg * 0.6;
+        radius = 1 + hg * 0.5;
+        break;
+      }
     }
-    return Math.max(0.15, s);
+    return {
+      band:   Math.max(0.15, band),
+      gap:    Math.max(0.15, gap),
+      radius: Math.max(0.15, radius)
+    };
   }
 
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Each step adds: 2*(bandX*bs_i + gapX*curve^i) horizontally, 2*(bandY*bs_i + gapY*curve^i) vertically,
-  // where bs_i is the band-thickness scale for ring i (per Band Profile).
+  // Each ring's band thickness, gap to next ring, and corner radius are all
+  // shaped by the Band Profile (via profileScale).
   function computeRings(s) {
     const out = [];
     let w = s.bW, h = s.bH, r = s.bR;
-    out.push({ W: w, H: h, R: r, bs: bandScale(0, s.N, s.bandProfile, s.bandVar) });
+    out.push({ W: w, H: h, R: r, ps: profileScale(0, s.N, s.bandProfile, s.bandVar) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      const bs = bandScale(i, s.N, s.bandProfile, s.bandVar);
-      w = w + 2 * (s.bx * bs + s.gx * cf);
-      h = h + 2 * (s.by * bs + s.gy * cf);
-      r = r + s.dRb * bs + s.dRg * cf;
-      out.push({ W: w, H: h, R: r, bs });
+      const ps = profileScale(i, s.N, s.bandProfile, s.bandVar);
+      w = w + 2 * (s.bx * ps.band + s.gx * ps.gap * cf);
+      h = h + 2 * (s.by * ps.band + s.gy * ps.gap * cf);
+      r = r + (s.dRb * ps.band + s.dRg * ps.gap * cf) * ps.radius;
+      out.push({ W: w, H: h, R: r, ps });
     }
     return out;
   }
@@ -579,16 +617,19 @@
   }
 
   // ─── screensaver state library
+  // Each preset isolates one motion (high contrast) or layers two for variety.
+  // Pure presets first so users immediately see what each behavior does.
   const SS_STATES = [
-    { name: "SLOW TILT",      tilt: 0.40, breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
-    { name: "BREATH + TILT",  tilt: 0.20, breathe: 0.50, cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
-    { name: "CASCADE",        tilt: 0.10, breathe: 0,    cascade: 0.60, counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
-    { name: "COUNTER ROT",    tilt: 0,    breathe: 0,    cascade: 0,    counter: 0.50, drift: 0,    shift: 0,    grow: 0,    morph: 0 },
-    { name: "DRIFT FIELD",    tilt: 0.15, breathe: 0.40, cascade: 0,    counter: 0,    drift: 0.50, shift: 0,    grow: 0,    morph: 0 },
-    { name: "SHIFT WEAVE",    tilt: 0,    breathe: 0,    cascade: 0.30, counter: 0,    drift: 0,    shift: 0.60, grow: 0,    morph: 0 },
-    { name: "GROW",           tilt: 0,    breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0.50, morph: 0 },
-    { name: "MORPH PULSE",    tilt: 0.20, breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0.55 },
-    { name: "FULL ENGINE",    tilt: 0.30, breathe: 0.30, cascade: 0.40, counter: 0,    drift: 0,    shift: 0.30, grow: 0,    morph: 0 }
+    { name: "TILT",          tilt: 0.65, breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
+    { name: "BREATH",        tilt: 0,    breathe: 0.80, cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
+    { name: "CASCADE",       tilt: 0,    breathe: 0,    cascade: 0.85, counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
+    { name: "COUNTER",       tilt: 0,    breathe: 0,    cascade: 0,    counter: 0.75, drift: 0,    shift: 0,    grow: 0,    morph: 0 },
+    { name: "DRIFT",         tilt: 0,    breathe: 0,    cascade: 0,    counter: 0,    drift: 0.65, shift: 0,    grow: 0,    morph: 0 },
+    { name: "SHIFT WEAVE",   tilt: 0,    breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0.80, grow: 0,    morph: 0 },
+    { name: "GROW",          tilt: 0,    breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0.60, morph: 0 },
+    { name: "MORPH PULSE",   tilt: 0,    breathe: 0,    cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0.75 },
+    { name: "TILT + BREATH", tilt: 0.40, breathe: 0.55, cascade: 0,    counter: 0,    drift: 0,    shift: 0,    grow: 0,    morph: 0 },
+    { name: "FULL ENGINE",   tilt: 0.25, breathe: 0.35, cascade: 0.45, counter: 0,    drift: 0.30, shift: 0.30, grow: 0,    morph: 0.30 }
   ];
   const SS_STATE_DURATION_MS = 9000;
   const SS_FADE_MS = 2200;
@@ -699,7 +740,7 @@
             W: r0.W + (ring.W - r0.W) * wGrow,
             H: r0.H + (ring.H - r0.H) * wGrow,
             R: r0.R + (ring.R - r0.R) * wGrow,
-            bs: r0.bs
+            ps: r0.ps
           };
           opacity = 1 - (1 - opacity) * wGrow;
         }
@@ -722,8 +763,11 @@
       const drot = cascadeRot + counterRot;
 
       const totalRot = markRot + drot;
-      const bs = ring.bs ?? 1;
-      const path = ringPath(morphedRing, state.bx * bs, state.by * bs, state.dRb * bs);
+      const ps = ring.ps ?? { band: 1, gap: 1, radius: 1 };
+      // Band Profile drives band thickness AND the visible corner radius —
+      // not just the band, so the whole ring shape responds to the profile.
+      const morphedRingWithRadius = { W, H, R: R * ps.radius };
+      const path = ringPath(morphedRingWithRadius, state.bx * ps.band, state.by * ps.band, state.dRb * ps.band);
       const op = opacity < 0.999 ? ` opacity="${opacity.toFixed(3)}"` : "";
       svg += `<g transform="translate(${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}) rotate(${totalRot.toFixed(2)}) scale(${markScale.toFixed(4)})"${op}><path d="${path}" fill="${fg}" fill-rule="evenodd"/></g>`;
     }
@@ -794,9 +838,14 @@
       for (const key in PHASE_RATE) {
         state.motion[key].phase += dt * state.motion[key].speed * PHASE_RATE[key];
       }
-      // Tilt + counter accumulate rotation while their weight is high.
-      // When weight drops to 0, accumulation stops — rotation freezes in place.
-      // When weight rises again, accumulation resumes from where it stopped.
+      // Tilt + counter accumulate while their weight is high, and decay back to 0
+      // when weight is low. Decay is proportional to (1 - weight) so an active
+      // motion doesn't decay; a disabled one winds down gently. This avoids both
+      // the sharp unwind from before AND the residual-rotation-across-presets
+      // problem of pure freeze.
+      const decayBase = Math.pow(0.96, dt * 60);
+      state.motion.tilt.accRot    *= 1 - (1 - decayBase) * (1 - state.motion.tilt.weight);
+      state.motion.counter.accRot *= 1 - (1 - decayBase) * (1 - state.motion.counter.weight);
       state.motion.tilt.accRot    += dt * state.motion.tilt.speed * 18 * state.motion.tilt.weight;
       state.motion.counter.accRot += dt * state.motion.counter.speed * state.motion.counter.amount * 1.4 * state.motion.counter.weight;
 
