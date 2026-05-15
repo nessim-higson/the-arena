@@ -369,7 +369,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.4</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.5</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -1491,60 +1491,176 @@
   $("resetAnchor").addEventListener("click", () => { resetAnchor(); toast("ANCHOR RESET"); });
   $("resetProfile").addEventListener("click", () => { resetProfile(); toast("PROFILE RESET"); });
 
-  // ─── full randomize (everything: stack, anchor, profile, position, motion)
-  // The tool's true "default" — variation is the resting state, Canonical
-  // is the explicit revert-to-baseline. Used on initial load + the
-  // Randomize header button.
-  function randomizeAll() {
-    // Position: 50% center, 50% one of the 8 non-center positions
-    const posOptions = [
-      [0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5],  // center (weighted)
+  // ─── full randomize: distinct composition "moods" so the output has real range
+  // Each mood is a coherent aesthetic territory with its own parameter bounds
+  // AND a curated motion preset list. Picking a mood, then sampling within it,
+  // produces compositions with personality instead of a beige average.
+  const COMP_MOODS = [
+    {
+      name: "MINIMAL",        // very few rings, huge gaps — like an extruded canonical
+      weight: 0.14,
+      N: [3, 6],
+      bx: [4, 10], by: [10, 28], gx: [80, 140], gy: [28, 60],
+      scale: [1.6, 2.6],
+      anchorAspect: "wide-or-canonical",
+      positions: "center-heavy",
+      motions: ["TILT", "BREATH", "MORPH PULSE"]
+    },
+    {
+      name: "DENSE",          // many rings, tight gaps — moiré territory
+      weight: 0.16,
+      N: [25, 48],
+      bx: [2, 5], by: [4, 11], gx: [8, 22], gy: [4, 14],
+      scale: [0.9, 1.5],
+      anchorAspect: "any",
+      positions: "any",
+      motions: ["CASCADE", "SHIFT WEAVE", "GROW", "MORPH PULSE"]
+    },
+    {
+      name: "SEPARATED",      // 4-7 rings flung far apart — extreme negative space
+      weight: 0.14,
+      N: [4, 7],
+      bx: [3, 8], by: [10, 22], gx: [110, 200], gy: [30, 70],
+      scale: [1.0, 1.8],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      motions: ["TILT", "DRIFT", "COUNTER", "BREATH"]
+    },
+    {
+      name: "OFF-CENTER",     // anchor in a corner, rings extending toward the opposite
+      weight: 0.16,
+      N: [10, 22],
+      bx: [4, 10], by: [10, 22], gx: [28, 65], gy: [14, 28],
+      scale: [1.3, 2.2],
+      anchorAspect: "any",
+      positions: "corners",
+      motions: ["TILT", "DRIFT", "CASCADE", "BREATH"]
+    },
+    {
+      name: "HERO",           // big mark, few-to-medium rings, dominant
+      weight: 0.13,
+      N: [5, 11],
+      bx: [6, 14], by: [14, 30], gx: [40, 85], gy: [18, 40],
+      scale: [2.2, 3.4],
+      anchorAspect: "wide-or-canonical",
+      positions: "center-heavy",
+      motions: ["TILT", "BREATH", "TILT + BREATH", "MORPH PULSE"]
+    },
+    {
+      name: "CANONICAL+",     // close to brand baseline but with character
+      weight: 0.12,
+      N: [4, 7],
+      bx: [6, 11], by: [18, 32], gx: [55, 95], gy: [18, 32],
+      scale: [1.5, 2.4],
+      anchorAspect: "canonical",
+      positions: "center-heavy",
+      motions: ["TILT", "MORPH PULSE", "BREATH"]
+    },
+    {
+      name: "EXPLOSION",      // 35-60 rings, fine lines, fills the frame
+      weight: 0.08,
+      N: [35, 60],
+      bx: [1, 3], by: [3, 8], gx: [4, 14], gy: [3, 9],
+      scale: [1.3, 2.5],
+      anchorAspect: "canonical-or-square",
+      positions: "center-heavy",
+      motions: ["FULL ENGINE", "CASCADE", "SHIFT WEAVE", "GROW"]
+    },
+    {
+      name: "PORTRAIT-BANNER", // wide thin anchor, few rings — like reference image 1
+      weight: 0.07,
+      N: [3, 6],
+      bx: [3, 8], by: [8, 18], gx: [55, 110], gy: [22, 50],
+      scale: [1.4, 2.4],
+      anchorAspect: "wide",
+      positions: "center-heavy",
+      motions: ["BREATH", "TILT", "MORPH PULSE"]
+    }
+  ];
+
+  function pickWeighted(items) {
+    const total = items.reduce((s, x) => s + x.weight, 0);
+    let r = Math.random() * total;
+    for (const x of items) { r -= x.weight; if (r <= 0) return x; }
+    return items[items.length - 1];
+  }
+
+  function pickAnchorShape(spec) {
+    const wide      = { bW: [260, 400], bH: [55, 110] };
+    const canonical = { bW: [200, 290], bH: [95, 160] };
+    const square    = { bW: [140, 220], bH: [120, 220] };
+    const tall      = { bW: [100, 170], bH: [200, 320] };
+    if (spec === "wide")                      return wide;
+    if (spec === "canonical")                 return canonical;
+    if (spec === "wide-or-canonical")         return Math.random() < 0.5 ? wide : canonical;
+    if (spec === "canonical-or-square")       return Math.random() < 0.5 ? canonical : square;
+    // "any"
+    const all = [wide, canonical, square, tall];
+    return all[Math.floor(Math.random() * all.length)];
+  }
+
+  function pickPosition(spec) {
+    if (spec === "center-heavy") {
+      return Math.random() < 0.75 ? [0.5, 0.5] : [
+        [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75]
+      ][Math.floor(Math.random() * 4)];
+    }
+    if (spec === "corners") {
+      return [[0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]][Math.floor(Math.random() * 4)];
+    }
+    // "any"
+    const opts = [
+      [0.5, 0.5], [0.5, 0.5],
       [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75],
-      [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]
+      [0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]
     ];
-    const pos = posOptions[Math.floor(Math.random() * posOptions.length)];
+    return opts[Math.floor(Math.random() * opts.length)];
+  }
+
+  function randomizeAll() {
+    const mood = pickWeighted(COMP_MOODS);
+    state.lastMood = mood.name;
+
+    // Stack
+    state.N = randInt(mood.N[0], mood.N[1]);
+    state.rot = rand(-30, 30);
+    state.scale = rand(mood.scale[0], mood.scale[1]);
+    state.curve = rand(0.92, 1.10);
+
+    // Position
+    const pos = pickPosition(mood.positions);
     state.px = pos[0];
     state.py = pos[1];
 
-    // Stack
-    state.N = randInt(6, 28);
-    state.rot = rand(-25, 25);
-    state.scale = rand(1.0, 1.8);
-    state.curve = rand(0.92, 1.10);
-
-    // Anchor — pick a shape category so we get banner/canonical/square/tall variety
-    const shapes = [
-      { bW: [240, 380], bH: [60, 110] },    // wide banner (matches your reference image 1)
-      { bW: [180, 280], bH: [90, 160] },    // canonical-ish
-      { bW: [140, 220], bH: [120, 200] },   // squarish
-      { bW: [100, 170], bH: [180, 290] }    // tall
-    ];
-    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    // Anchor — shape category × the mood's band/gap ranges
+    const shape = pickAnchorShape(mood.anchorAspect);
     state.bW = randInt(shape.bW[0], shape.bW[1]);
     state.bH = randInt(shape.bH[0], shape.bH[1]);
     state.bR = randInt(0, Math.floor(Math.min(state.bW, state.bH) * 0.45));
-    state.bx = rand(4, 12);
-    state.by = rand(8, 24);
-    state.gx = rand(18, 65);
-    state.gy = rand(8, 28);
+    state.bx = rand(mood.bx[0], mood.bx[1]);
+    state.by = rand(mood.by[0], mood.by[1]);
+    state.gx = rand(mood.gx[0], mood.gx[1]);
+    state.gy = rand(mood.gy[0], mood.gy[1]);
 
-    // Profile — never random-pick Uniform (it has no visible variation).
-    // Canonical is the explicit path to uniform; randomization is for character.
+    // Profile — never Uniform; always something with character
     const profiles = ["TAPER_OUT", "TAPER_IN", "ALTERNATE", "TIERED", "HOURGLASS"];
     state.bandProfile = profiles[Math.floor(Math.random() * profiles.length)];
-    state.bandVar = rand(0.40, 0.75);
+    state.bandVar = rand(0.40, 0.80);
+
+    return mood;
   }
 
   $("randomizeAll").addEventListener("click", () => {
-    randomizeAll();
+    const mood = randomizeAll();
     syncAllSliders();
     syncBandProfileUI();
-    // also re-roll motion
-    const idx = Math.floor(Math.random() * SS_STATES.length);
-    applySSStateInstant(idx);
+    // Motion — pick from the mood's curated list so the animation matches the composition.
+    const motionName = mood.motions[Math.floor(Math.random() * mood.motions.length)];
+    const idx = SS_STATES.findIndex(s => s.name === motionName);
+    applySSStateInstant(idx >= 0 ? idx : 0);
     if (!state.playing) togglePlay();
     render();
-    toast("RANDOMIZED");
+    toast(mood.name);
   });
 
   // ─── full Canonical reset (back to the 4-ring RINGS.svg mark)
@@ -1572,15 +1688,16 @@
   buildMotionRows();
   buildSSStateGrid();
   syncAllSliders();
-  // Fresh load: randomize the whole composition + pick a random motion preset.
-  // Variation is the tool's resting state; Canonical button is the revert path.
-  // Shared URLs are honored as-is (no randomization, so links restore exactly).
+  // Fresh load: pick a composition mood + matching motion. Variation is the
+  // tool's resting state; Canonical is the revert. Shared URLs (#e=) load
+  // exactly as encoded.
   if (!fromURL) {
-    randomizeAll();
+    const mood = randomizeAll();
     syncAllSliders();
     syncBandProfileUI();
-    const randIdx = Math.floor(Math.random() * SS_STATES.length);
-    applySSStateInstant(randIdx);
+    const motionName = mood.motions[Math.floor(Math.random() * mood.motions.length)];
+    const idx = SS_STATES.findIndex(s => s.name === motionName);
+    applySSStateInstant(idx >= 0 ? idx : 0);
     state.playing = true;
     $("playPause").textContent = "❚❚ Pause";
   }
