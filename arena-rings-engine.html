@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build-version" content="v0.9"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
+<meta name="build-version" content="v1.0"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
 <meta name="build-date" content="2026-05-15">
 <style>
   :root {
@@ -166,11 +166,36 @@
     place-items: center;
     background: #181818;
     overflow: hidden;
+    padding: 24px;
   }
   /* subtle frame around the canvas so the format is unmistakable on any bg */
   svg#canvas {
     box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
   }
+  /* collapsible fieldsets */
+  fieldset.collapsible > *:not(legend) {
+    transition: opacity 120ms;
+  }
+  fieldset.collapsible.collapsed > *:not(legend) {
+    display: none;
+  }
+  fieldset.collapsible > legend {
+    cursor: pointer;
+    user-select: none;
+  }
+  fieldset.collapsible > legend::before {
+    content: "▾";
+    display: inline-block;
+    width: 12px;
+    margin-right: 4px;
+    opacity: 0.6;
+    font-size: 9px;
+    text-align: center;
+  }
+  fieldset.collapsible.collapsed > legend::before {
+    content: "▸";
+  }
+  fieldset.collapsible > legend:hover { color: var(--fg); }
   #stage::before {
     content: "";
     position: absolute; inset: 0;
@@ -183,13 +208,10 @@
     transition: opacity 120ms;
   }
   svg#canvas {
-    max-width: 96vw;
-    max-height: 92vh;
-    width: auto;
-    height: auto;
-    aspect-ratio: var(--aspect, 1.778);
     display: block;
     z-index: 1;
+    /* width / height set explicitly by fitCanvas() in JS so the canvas always
+       grows to fill the available stage area regardless of chosen format */
   }
   .format-grid {
     display: grid;
@@ -294,7 +316,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v0.9</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.0</span> · <span id="buildDate">15 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -310,9 +332,12 @@
       <div class="row"><label>Custom H</label><span class="val" id="v-fH">1080</span><input id="fH" type="range" min="540" max="6000" step="20" value="1080"></div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="collapsible">
       <legend>Stack
-        <span class="actions"><button class="btn tiny" id="reseed">Reset</button></span>
+        <span class="actions">
+          <button class="btn tiny" id="remixStack">Remix</button>
+          <button class="btn tiny" id="reseed">Reset</button>
+        </span>
       </legend>
       <div class="row"><label>Ring Count</label><span class="val" id="v-N">22</span><input id="N" type="range" min="1" max="60" step="1" value="22"></div>
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
@@ -322,8 +347,10 @@
       <div class="row"><label>Spacing Curve</label><span class="val" id="v-curve">1.00</span><input id="curve" type="range" min="0.6" max="1.6" step="0.01" value="1.00"></div>
     </fieldset>
 
-    <fieldset>
-      <legend>Anchor Ring</legend>
+    <fieldset class="collapsible">
+      <legend>Anchor Ring
+        <span class="actions"><button class="btn tiny" id="remixAnchor">Remix</button></span>
+      </legend>
       <div class="row"><label>Width</label><span class="val" id="v-bW">160</span><input id="bW" type="range" min="20" max="800" step="2" value="160"></div>
       <div class="row"><label>Height</label><span class="val" id="v-bH">90</span><input id="bH" type="range" min="20" max="500" step="2" value="90"></div>
       <div class="row"><label>Corner R</label><span class="val" id="v-bR">18</span><input id="bR" type="range" min="0" max="240" step="1" value="18"></div>
@@ -333,8 +360,10 @@
       <div class="row"><label>Gap H</label><span class="val" id="v-gx">28</span><input id="gx" type="range" min="0" max="160" step="0.5" value="28"></div>
     </fieldset>
 
-    <fieldset>
-      <legend>Band Profile</legend>
+    <fieldset class="collapsible">
+      <legend>Band Profile
+        <span class="actions"><button class="btn tiny" id="remixProfile">Remix</button></span>
+      </legend>
       <div class="format-grid" id="bandProfileGrid" style="grid-template-columns:repeat(2,1fr)">
         <button class="format-btn active" data-profile="UNIFORM">Uniform<span class="sub">all equal</span></button>
         <button class="format-btn" data-profile="TAPER_OUT">Taper Out<span class="sub">thick →</span></button>
@@ -430,7 +459,7 @@
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v0.9</span>
+      <span style="opacity:0.45">BUILD v1.0</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -882,6 +911,29 @@
 
 
   // ─── format
+  function fitCanvas() {
+    const stage = $("stage");
+    const canvas = $("canvas");
+    const rect = stage.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const pad = 24; // breathing room matching CSS stage padding
+    const availW = Math.max(40, rect.width - pad * 2);
+    const availH = Math.max(40, rect.height - pad * 2);
+    const aspect = state.fW / state.fH;
+    let w, h;
+    if (availW / availH > aspect) {
+      // height-limited
+      h = availH;
+      w = h * aspect;
+    } else {
+      // width-limited
+      w = availW;
+      h = w / aspect;
+    }
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+  }
+
   function applyFormat() {
     VW = state.fW;
     VH = state.fH;
@@ -897,7 +949,10 @@
     // sync custom sliders
     $("fW").value = VW; $("v-fW").textContent = VW;
     $("fH").value = VH; $("v-fH").textContent = VH;
+    fitCanvas();
   }
+
+  window.addEventListener("resize", fitCanvas);
   document.querySelectorAll(".format-btn").forEach(b => {
     b.addEventListener("click", () => {
       state.fW = +b.dataset.width;
@@ -1189,6 +1244,54 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove("show"), 1500);
   }
+
+  // ─── collapsible fieldsets — click legend (but not its buttons) to toggle
+  document.querySelectorAll("fieldset.collapsible > legend").forEach(legend => {
+    legend.addEventListener("click", e => {
+      if (e.target.closest("button")) return;
+      legend.parentElement.classList.toggle("collapsed");
+    });
+  });
+
+  // ─── remix handlers (randomize a section's variables within tasteful ranges)
+  function rand(min, max) { return min + Math.random() * (max - min); }
+  function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+
+  $("remixStack").addEventListener("click", () => {
+    state.N = randInt(8, 38);
+    state.px = rand(0.25, 0.75);
+    state.py = rand(0.25, 0.75);
+    state.rot = rand(-45, 45);
+    state.scale = rand(0.6, 1.5);
+    state.curve = rand(0.88, 1.18);
+    syncAllSliders();
+    render();
+    toast("STACK REMIXED");
+  });
+
+  $("remixAnchor").addEventListener("click", () => {
+    state.bW = randInt(80, 280);
+    state.bH = randInt(50, 180);
+    state.bR = randInt(0, Math.floor(Math.min(state.bW, state.bH) / 2));
+    state.bx = rand(2, 14);
+    state.by = rand(5, 28);
+    state.gx = rand(12, 60);
+    state.gy = rand(6, 32);
+    syncAllSliders();
+    render();
+    toast("ANCHOR REMIXED");
+  });
+
+  $("remixProfile").addEventListener("click", () => {
+    const profiles = ["UNIFORM", "TAPER_OUT", "TAPER_IN", "ALTERNATE", "TIERED", "HOURGLASS"];
+    let p;
+    do { p = profiles[Math.floor(Math.random() * profiles.length)]; } while (p === state.bandProfile && profiles.length > 1);
+    state.bandProfile = p;
+    state.bandVar = rand(0.25, 0.85);
+    syncBandProfileUI();
+    render();
+    toast("PROFILE: " + p);
+  });
 
   // ─── init
   const fromURL = location.hash && location.hash.includes("e=");
