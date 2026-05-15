@@ -53,7 +53,7 @@
   }
   fieldset {
     border: 0;
-    border-top: 1px solid #262626;
+    border-top: 1px solid #2e2e2e;
     padding: 0;
     margin: 0;
   }
@@ -74,19 +74,33 @@
   fieldset:not(.collapsible) {
     padding-bottom: 12px;
   }
-  /* Collapsible-specific: prominent header strip, content padded only when open */
+  /* Collapsible legends are real menu items: filled bar, bold text, bigger indicator,
+     clear hover. Designed to read as clickable buttons in the side panel. */
   fieldset.collapsible > legend {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--fg);
     font-size: 10.5px;
+    letter-spacing: 0.24em;
+    background: rgba(255,255,255,0.08);
+    padding: 14px 14px;
+    margin: 0 -18px;
     cursor: pointer;
     user-select: none;
-    transition: background 100ms;
+    transition: background 100ms, color 100ms, border-left-color 100ms;
+    border-left: 2px solid var(--accent);
   }
-  fieldset.collapsible.collapsed > legend { color: var(--muted); }
-  fieldset.collapsible > legend:hover { background: rgba(255,255,255,0.025); }
+  fieldset.collapsible.collapsed > legend {
+    background: rgba(255,255,255,0.05);
+    color: #d8d8d8;
+    border-left-color: transparent;
+  }
+  fieldset.collapsible > legend:hover {
+    background: rgba(255,255,255,0.13);
+    color: var(--fg);
+    border-left-color: var(--accent);
+  }
   fieldset.collapsible > *:not(legend) {
-    padding-bottom: 14px;
+    padding: 14px 0;
   }
   fieldset.collapsible.collapsed > *:not(legend) {
     display: none;
@@ -95,14 +109,14 @@
     content: "▾";
     display: inline-block;
     width: 14px;
-    margin-right: 6px;
-    font-size: 10px;
-    opacity: 0.8;
+    margin-right: 8px;
+    font-size: 11px;
+    opacity: 0.9;
     transition: transform 120ms;
   }
   fieldset.collapsible.collapsed > legend::before {
     content: "▸";
-    opacity: 0.55;
+    opacity: 0.7;
   }
   .row {
     display: grid;
@@ -369,7 +383,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.5</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.6</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -1498,7 +1512,7 @@
   const COMP_MOODS = [
     {
       name: "MINIMAL",        // very few rings, huge gaps — like an extruded canonical
-      weight: 0.14,
+      weight: 0.10,
       N: [3, 6],
       bx: [4, 10], by: [10, 28], gx: [80, 140], gy: [28, 60],
       scale: [1.6, 2.6],
@@ -1507,8 +1521,8 @@
       motions: ["TILT", "BREATH", "MORPH PULSE"]
     },
     {
-      name: "DENSE",          // many rings, tight gaps — moiré territory
-      weight: 0.16,
+      name: "DENSE",
+      weight: 0.13,
       N: [25, 48],
       bx: [2, 5], by: [4, 11], gx: [8, 22], gy: [4, 14],
       scale: [0.9, 1.5],
@@ -1517,8 +1531,8 @@
       motions: ["CASCADE", "SHIFT WEAVE", "GROW", "MORPH PULSE"]
     },
     {
-      name: "SEPARATED",      // 4-7 rings flung far apart — extreme negative space
-      weight: 0.14,
+      name: "SEPARATED",
+      weight: 0.11,
       N: [4, 7],
       bx: [3, 8], by: [10, 22], gx: [110, 200], gy: [30, 70],
       scale: [1.0, 1.8],
@@ -1527,8 +1541,18 @@
       motions: ["TILT", "DRIFT", "COUNTER", "BREATH"]
     },
     {
-      name: "OFF-CENTER",     // anchor in a corner, rings extending toward the opposite
-      weight: 0.16,
+      name: "EDGE-ANCHORED",  // ★ NEW: anchor jammed into a corner so rings emanate
+      weight: 0.22,           //   from there (matches reference image 3) — high
+      N: [12, 26],            //   weight so corner compositions appear often.
+      bx: [4, 10], by: [10, 22], gx: [30, 70], gy: [14, 32],
+      scale: [1.6, 2.6],
+      anchorAspect: "any",
+      positions: "extreme-corners",
+      motions: ["TILT", "DRIFT", "CASCADE", "BREATH"]
+    },
+    {
+      name: "OFF-CENTER",
+      weight: 0.10,
       N: [10, 22],
       bx: [4, 10], by: [10, 22], gx: [28, 65], gy: [14, 28],
       scale: [1.3, 2.2],
@@ -1537,8 +1561,8 @@
       motions: ["TILT", "DRIFT", "CASCADE", "BREATH"]
     },
     {
-      name: "HERO",           // big mark, few-to-medium rings, dominant
-      weight: 0.13,
+      name: "HERO",
+      weight: 0.10,
       N: [5, 11],
       bx: [6, 14], by: [14, 30], gx: [40, 85], gy: [18, 40],
       scale: [2.2, 3.4],
@@ -1547,8 +1571,28 @@
       motions: ["TILT", "BREATH", "TILT + BREATH", "MORPH PULSE"]
     },
     {
-      name: "CANONICAL+",     // close to brand baseline but with character
-      weight: 0.12,
+      name: "MASSIVE",        // ★ NEW: rings break the frame in multiple directions
+      weight: 0.07,
+      N: [6, 14],
+      bx: [8, 18], by: [20, 38], gx: [60, 130], gy: [25, 55],
+      scale: [3.0, 4.8],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      motions: ["TILT", "BREATH", "MORPH PULSE", "TILT + BREATH"]
+    },
+    {
+      name: "TINY",           // ★ NEW: small contained mark, lots of negative space
+      weight: 0.07,
+      N: [4, 9],
+      bx: [3, 8], by: [8, 20], gx: [25, 65], gy: [12, 28],
+      scale: [0.4, 0.8],
+      anchorAspect: "any",
+      positions: "any",
+      motions: ["TILT", "BREATH", "MORPH PULSE", "DRIFT"]
+    },
+    {
+      name: "CANONICAL+",
+      weight: 0.07,
       N: [4, 7],
       bx: [6, 11], by: [18, 32], gx: [55, 95], gy: [18, 32],
       scale: [1.5, 2.4],
@@ -1557,8 +1601,8 @@
       motions: ["TILT", "MORPH PULSE", "BREATH"]
     },
     {
-      name: "EXPLOSION",      // 35-60 rings, fine lines, fills the frame
-      weight: 0.08,
+      name: "EXPLOSION",
+      weight: 0.06,
       N: [35, 60],
       bx: [1, 3], by: [3, 8], gx: [4, 14], gy: [3, 9],
       scale: [1.3, 2.5],
@@ -1567,8 +1611,8 @@
       motions: ["FULL ENGINE", "CASCADE", "SHIFT WEAVE", "GROW"]
     },
     {
-      name: "PORTRAIT-BANNER", // wide thin anchor, few rings — like reference image 1
-      weight: 0.07,
+      name: "PORTRAIT-BANNER",
+      weight: 0.03,
       N: [3, 6],
       bx: [3, 8], by: [8, 18], gx: [55, 110], gy: [22, 50],
       scale: [1.4, 2.4],
@@ -1607,6 +1651,14 @@
     }
     if (spec === "corners") {
       return [[0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]][Math.floor(Math.random() * 4)];
+    }
+    if (spec === "extreme-corners") {
+      // pushed further into the corner so rings clearly emanate from there,
+      // extending far across to the opposite side and breaking the frame
+      return [
+        [0.10, 0.10], [0.90, 0.10], [0.10, 0.90], [0.90, 0.90],
+        [0.15, 0.20], [0.85, 0.20], [0.15, 0.80], [0.85, 0.80]
+      ][Math.floor(Math.random() * 8)];
     }
     // "any"
     const opts = [
