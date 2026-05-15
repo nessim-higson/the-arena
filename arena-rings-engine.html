@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="build-version" content="v0.7"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
+<meta name="build-version" content="v0.8"><!-- band profile drives band+gap+radius; pure-motion presets; accRot decays -->
 <meta name="build-date" content="2026-05-15">
 <style>
   :root {
@@ -222,6 +222,16 @@
   .format-btn:hover { border-color: var(--muted); color: var(--fg); }
   .format-btn.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   .format-btn.active .sub { color: var(--bg); opacity: 0.7; }
+  /* mini ring-stack preview shown inside Band Profile buttons */
+  .prof-icon {
+    width: 90%;
+    height: 36px;
+    display: block;
+    margin-bottom: 4px;
+    color: var(--fg);
+  }
+  .format-btn.active .prof-icon { color: var(--bg); }
+  .prof-icon path { fill: currentColor; }
   .stage-meta {
     position: absolute;
     top: 18px;
@@ -284,7 +294,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v0.7</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v0.8</span> · <span id="buildDate">15 MAY 2026</span></div>
 
     <fieldset>
       <legend>Format</legend>
@@ -420,7 +430,7 @@
       <b id="meta-N">22</b> RINGS<br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v0.7</span>
+      <span style="opacity:0.45">BUILD v0.8</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -922,6 +932,46 @@
   });
 
   // ─── band profile
+  // Mini ring-stack preview for each profile button. Uses the same profileScale
+  // logic as the engine itself, so the icon shows exactly how that profile
+  // shapes a stack — at a representative variation (0.75) so the character reads.
+  function buildProfilePreviewSVG(profile, amount = 0.75) {
+    const N = 5;
+    const cfg = { bW: 8, bH: 4, bR: 1, bx: 0.4, by: 0.85, dRb: 0.4, gx: 1.4, gy: 0.7, dRg: 0.2 };
+    const rings = [];
+    let w = cfg.bW, h = cfg.bH, r = cfg.bR;
+    rings.push({ w, h, r, ps: profileScale(0, N, profile, amount) });
+    for (let i = 1; i < N; i++) {
+      const ps = profileScale(i, N, profile, amount);
+      w = w + 2 * (cfg.bx * ps.band + cfg.gx * ps.gap);
+      h = h + 2 * (cfg.by * ps.band + cfg.gy * ps.gap);
+      r = r + (cfg.dRb * ps.band + cfg.dRg * ps.gap) * ps.radius;
+      rings.push({ w, h, r, ps });
+    }
+    const last = rings[N - 1];
+    const vw = last.w + 2;
+    const vh = last.h + 2;
+    let d = "";
+    for (const ring of rings) {
+      d += roundedRect(0, 0, ring.w, ring.h, ring.r);
+      const iw = ring.w - 2 * cfg.bx * ring.ps.band;
+      const ih = ring.h - 2 * cfg.by * ring.ps.band;
+      const ir = Math.max(0, (ring.r - cfg.dRb * ring.ps.band) * ring.ps.radius);
+      if (iw > 0 && ih > 0) d += " " + roundedRect(0, 0, iw, ih, ir);
+    }
+    return `<svg class="prof-icon" viewBox="${(-vw/2).toFixed(2)} ${(-vh/2).toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}" preserveAspectRatio="xMidYMid meet"><path d="${d}" fill-rule="evenodd"/></svg>`;
+  }
+
+  function injectProfileIcons() {
+    document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
+      const profile = b.dataset.profile;
+      // Skip if already injected
+      if (b.querySelector(".prof-icon")) return;
+      const labelHTML = b.innerHTML;
+      b.innerHTML = buildProfilePreviewSVG(profile) + labelHTML;
+    });
+  }
+
   function syncBandProfileUI() {
     document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
       b.classList.toggle("active", b.dataset.profile === state.bandProfile);
@@ -1156,6 +1206,7 @@
   const fromURL = location.hash && location.hash.includes("e=");
   loadHash();
   applyFormat();
+  injectProfileIcons();
   syncBandProfileUI();
   buildMotionRows();
   buildSSStateGrid();
