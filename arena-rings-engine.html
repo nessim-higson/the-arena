@@ -396,7 +396,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.7</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.8</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -451,7 +451,7 @@
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Position Y</label><span class="val" id="v-py">0.50</span><input id="py" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Rotation</label><span class="val" id="v-rot">0</span><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
-      <div class="row"><label>Scale</label><span class="val" id="v-scale">1.00</span><input id="scale" type="range" min="0.1" max="4" step="0.01" value="1"></div>
+      <div class="row"><label>Scale</label><span class="val" id="v-scale">1.00</span><input id="scale" type="range" min="0.1" max="10" step="0.01" value="1"></div>
       <div class="row"><label>Spacing Curve</label><span class="val" id="v-curve">1.00</span><input id="curve" type="range" min="0.6" max="1.6" step="0.01" value="1.00"></div>
     </fieldset>
 
@@ -618,14 +618,11 @@
     gx: 28, gy: 14, dRb: 6, dRg: 3,
     bandProfile: "UNIFORM",
     bandVar: 0.5,
-    // Anchor mode controls WHICH POINT OF EACH RING sits at (px, py).
-    // CENTER (default) → rings are concentric, growing symmetrically from the
-    // anchor. BOTTOM-RIGHT → each ring's bottom-right corner is at the anchor,
-    // so they stack up-left from there. This is how to get the "rings emanating
-    // from a corner" composition.
     anchorMode: "CENTER",
-    // smooth Band Profile transitions: current applied deltas lerp toward target
-    currentDeltas: [],
+    // If true, the mark scales down to fit the canvas at ~94% margin. Set
+    // false (by VIEWPORT BREAK mood) to let rings extend dramatically beyond
+    // the frame.
+    autoFit: true,
     motion: {
       // accRot fields accumulate rotation only while weight > 0; phases free-run.
       // This decouples each motion's internal time from the global timeAccum,
@@ -700,43 +697,24 @@
   }
 
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Uses state.currentDeltas (the smoothed per-ring deltas) so profile and
-  // variation changes morph instead of snapping.
+  // Band Profile is applied directly (no lerping) — used to morph over ~0.5s but
+  // the smooth transition combined with anchor-offset recomputing on each ring's
+  // changing size caused the "haywire" mid-transition shifting. Snapping is
+  // predictable: one profile, one composition.
   function computeRings(s) {
-    // make sure currentDeltas matches N — initialize from target if size mismatched
-    const targetDeltas = computeProfileDeltas(s.N, s.bandProfile);
-    if (!s.currentDeltas || s.currentDeltas.length !== s.N) {
-      s.currentDeltas = targetDeltas.map(d => d * s.bandVar);
-    }
+    const deltas = computeProfileDeltas(s.N, s.bandProfile);
     const out = [];
     let w = s.bW, h = s.bH, r = s.bR;
-    // Use currentDeltas directly as "delta × variation" (already smoothed).
-    out.push({ W: w, H: h, R: r, ps: profileFromDelta(s.currentDeltas[0], 1) });
+    out.push({ W: w, H: h, R: r, ps: profileFromDelta(deltas[0], s.bandVar) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      const ps = profileFromDelta(s.currentDeltas[i], 1);
+      const ps = profileFromDelta(deltas[i], s.bandVar);
       w = w + 2 * (s.bx * ps.band + s.gx * ps.gap * cf);
       h = h + 2 * (s.by * ps.band + s.gy * ps.gap * cf);
       r = r + (s.dRb * ps.band + s.dRg * ps.gap * cf) * ps.radius;
       out.push({ W: w, H: h, R: r, ps });
     }
     return out;
-  }
-
-  // Per-frame: smooth currentDeltas toward (target * variation). Approach rate
-  // gives a ~0.5s morph between profiles, which reads as a deliberate transition
-  // rather than a snap.
-  function smoothProfileDeltas(dt) {
-    const targetDeltas = computeProfileDeltas(state.N, state.bandProfile);
-    if (state.currentDeltas.length !== state.N) {
-      state.currentDeltas = targetDeltas.map(d => d * state.bandVar);
-      return;
-    }
-    const k = 1 - Math.pow(0.84, dt * 60);
-    for (let i = 0; i < state.N; i++) {
-      const target = targetDeltas[i] * state.bandVar;
-      state.currentDeltas[i] += (target - state.currentDeltas[i]) * k;
-    }
   }
 
   function ringPath(ring, bx, by, dRb) {
@@ -904,11 +882,9 @@
     // Breathe uses free-running phase too — speed changes don't cause phase jumps.
     let markScale = state.scale * (1 + Math.sin(state.motion.breathe.phase) * state.motion.breathe.amount * wBreathe);
 
-    // Auto-fit: if the outermost ring (rotated by current markRot) would exceed
-    // the canvas, shrink markScale so the mark fits at ~94% of the format.
-    // This lets the user click through Band Profiles and never lose the shape
-    // off-screen; the format chosen is honored, the mark adapts to it.
-    {
+    // Auto-fit: shrinks markScale so the outermost ring fits at 94% of the
+    // canvas. Disabled per mood (VIEWPORT BREAK) to let rings break the frame.
+    if (state.autoFit !== false) {
       const last = rings[rings.length - 1];
       const rotRad = (markRot * Math.PI) / 180;
       const c = Math.abs(Math.cos(rotRad));
@@ -1044,8 +1020,8 @@
       const target = m.on ? 1 : 0;
       m.weight += (target - m.weight) * k;
     }
-    // Smooth Band Profile transitions: deltas lerp toward target each frame.
-    smoothProfileDeltas(dt);
+    // Band profile snaps on click (no lerp) — eliminates the mid-transition
+    // ring shifting that read as "haywire" when combined with anchor-mode.
     if (state.playing) {
       state.timeAccum += dt;
       // Advance each oscillator's phase at its own rate.
@@ -1657,7 +1633,7 @@
       motions: ["TILT", "BREATH", "TILT + BREATH", "MORPH PULSE"]
     },
     {
-      name: "MASSIVE",        // ★ NEW: rings break the frame in multiple directions
+      name: "MASSIVE",
       weight: 0.07,
       N: [6, 14],
       bx: [8, 18], by: [20, 38], gx: [60, 130], gy: [25, 55],
@@ -1665,6 +1641,17 @@
       anchorAspect: "any",
       positions: "center-heavy",
       motions: ["TILT", "BREATH", "MORPH PULSE", "TILT + BREATH"]
+    },
+    {
+      name: "VIEWPORT BREAK",  // ★ NEW: rings intentionally extend beyond canvas
+      weight: 0.20,             // weighted high so it appears ~1 in 5 rolls
+      N: [10, 22],
+      bx: [4, 12], by: [12, 28], gx: [40, 90], gy: [20, 40],
+      scale: [4.0, 9.0],        // dramatic overflow
+      anchorAspect: "any",
+      positions: "center-heavy",
+      autoFit: false,           // skip the shrink-to-fit clamp
+      motions: ["TILT", "BREATH", "DRIFT", "MORPH PULSE", "CASCADE"]
     },
     {
       name: "TINY",           // ★ NEW: small contained mark, lots of negative space
@@ -1739,11 +1726,11 @@
       return [[0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]][Math.floor(Math.random() * 4)];
     }
     if (spec === "extreme-corners") {
-      // pushed further into the corner so rings clearly emanate from there,
-      // extending far across to the opposite side and breaking the frame
+      // Pulled in from the canvas edge so there's breathing space around the
+      // anchor (0.22-0.78 instead of right against the frame).
       return [
-        [0.10, 0.10], [0.90, 0.10], [0.10, 0.90], [0.90, 0.90],
-        [0.15, 0.20], [0.85, 0.20], [0.15, 0.80], [0.85, 0.80]
+        [0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78],
+        [0.28, 0.30], [0.72, 0.30], [0.28, 0.70], [0.72, 0.70]
       ][Math.floor(Math.random() * 8)];
     }
     // "any"
@@ -1767,20 +1754,22 @@
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
     if (mood.layout === "corner-emergence") {
+      // Positions pulled in from canvas edge so there's breathing space —
+      // anchor sits around 28/72%, not flush at the corner.
       const corners = [
-        { p: [0.20, 0.20], a: "TOP-LEFT" },
-        { p: [0.80, 0.20], a: "TOP-RIGHT" },
-        { p: [0.20, 0.80], a: "BOTTOM-LEFT" },
-        { p: [0.80, 0.80], a: "BOTTOM-RIGHT" }
+        { p: [0.28, 0.28], a: "TOP-LEFT" },
+        { p: [0.72, 0.28], a: "TOP-RIGHT" },
+        { p: [0.28, 0.72], a: "BOTTOM-LEFT" },
+        { p: [0.72, 0.72], a: "BOTTOM-RIGHT" }
       ];
       const c = corners[Math.floor(Math.random() * 4)];
       state.px = c.p[0]; state.py = c.p[1]; state.anchorMode = c.a;
     } else if (mood.layout === "edge-emergence") {
       const edges = [
-        { p: [0.5, 0.85], a: "BOTTOM-CENTER" },
-        { p: [0.5, 0.15], a: "TOP-CENTER" },
-        { p: [0.85, 0.5], a: "MIDDLE-RIGHT" },
-        { p: [0.15, 0.5], a: "MIDDLE-LEFT" }
+        { p: [0.5,  0.74], a: "BOTTOM-CENTER" },
+        { p: [0.5,  0.26], a: "TOP-CENTER" },
+        { p: [0.74, 0.5 ], a: "MIDDLE-RIGHT" },
+        { p: [0.26, 0.5 ], a: "MIDDLE-LEFT" }
       ];
       const e = edges[Math.floor(Math.random() * 4)];
       state.px = e.p[0]; state.py = e.p[1]; state.anchorMode = e.a;
@@ -1790,6 +1779,8 @@
       state.py = pos[1];
       state.anchorMode = "CENTER";
     }
+    // Auto-fit toggle (some moods disable it for intentional frame-break)
+    state.autoFit = mood.autoFit !== false;
 
     // Anchor — shape category × the mood's band/gap ranges
     const shape = pickAnchorShape(mood.anchorAspect);
