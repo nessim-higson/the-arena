@@ -206,14 +206,19 @@
   svg#canvas {
     box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
   }
-  /* prominent "back to brand baseline" button */
-  .canonical-btn {
+  /* two header buttons: canonical (revert to brand baseline) + randomize (re-roll everything) */
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 0 0 22px;
+  }
+  .header-btn {
     display: block;
     width: 100%;
-    padding: 12px 10px;
-    margin: 0 0 22px;
-    font: 600 11px/1 ui-monospace, monospace;
-    letter-spacing: 0.22em;
+    padding: 12px 6px;
+    font: 600 10px/1 ui-monospace, monospace;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--fg);
     background: transparent;
@@ -221,8 +226,10 @@
     cursor: pointer;
     transition: background 120ms, color 120ms, border-color 120ms;
   }
-  .canonical-btn:hover { border-color: var(--fg); }
-  .canonical-btn:active { background: var(--fg); color: var(--bg); }
+  .header-btn:hover { border-color: var(--fg); }
+  .header-btn:active { background: var(--fg); color: var(--bg); }
+  .header-btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .header-btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--fg); }
   /* 3x3 position grid: quick anchor placement on canvas */
   .pos-grid {
     display: grid;
@@ -362,8 +369,11 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.3</span> · <span id="buildDate">15 MAY 2026</span></div>
-    <button class="canonical-btn" id="goCanonical">↩ Canonical Mark</button>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.4</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="header-actions">
+      <button class="header-btn" id="goCanonical">↩ Canonical</button>
+      <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
+    </div>
 
     <fieldset class="collapsible collapsed">
       <legend>Format</legend>
@@ -1481,6 +1491,62 @@
   $("resetAnchor").addEventListener("click", () => { resetAnchor(); toast("ANCHOR RESET"); });
   $("resetProfile").addEventListener("click", () => { resetProfile(); toast("PROFILE RESET"); });
 
+  // ─── full randomize (everything: stack, anchor, profile, position, motion)
+  // The tool's true "default" — variation is the resting state, Canonical
+  // is the explicit revert-to-baseline. Used on initial load + the
+  // Randomize header button.
+  function randomizeAll() {
+    // Position: 50% center, 50% one of the 8 non-center positions
+    const posOptions = [
+      [0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5],  // center (weighted)
+      [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75],
+      [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]
+    ];
+    const pos = posOptions[Math.floor(Math.random() * posOptions.length)];
+    state.px = pos[0];
+    state.py = pos[1];
+
+    // Stack
+    state.N = randInt(6, 28);
+    state.rot = rand(-25, 25);
+    state.scale = rand(1.0, 1.8);
+    state.curve = rand(0.92, 1.10);
+
+    // Anchor — pick a shape category so we get banner/canonical/square/tall variety
+    const shapes = [
+      { bW: [240, 380], bH: [60, 110] },    // wide banner (matches your reference image 1)
+      { bW: [180, 280], bH: [90, 160] },    // canonical-ish
+      { bW: [140, 220], bH: [120, 200] },   // squarish
+      { bW: [100, 170], bH: [180, 290] }    // tall
+    ];
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    state.bW = randInt(shape.bW[0], shape.bW[1]);
+    state.bH = randInt(shape.bH[0], shape.bH[1]);
+    state.bR = randInt(0, Math.floor(Math.min(state.bW, state.bH) * 0.45));
+    state.bx = rand(4, 12);
+    state.by = rand(8, 24);
+    state.gx = rand(18, 65);
+    state.gy = rand(8, 28);
+
+    // Profile — never random-pick Uniform (it has no visible variation).
+    // Canonical is the explicit path to uniform; randomization is for character.
+    const profiles = ["TAPER_OUT", "TAPER_IN", "ALTERNATE", "TIERED", "HOURGLASS"];
+    state.bandProfile = profiles[Math.floor(Math.random() * profiles.length)];
+    state.bandVar = rand(0.40, 0.75);
+  }
+
+  $("randomizeAll").addEventListener("click", () => {
+    randomizeAll();
+    syncAllSliders();
+    syncBandProfileUI();
+    // also re-roll motion
+    const idx = Math.floor(Math.random() * SS_STATES.length);
+    applySSStateInstant(idx);
+    if (!state.playing) togglePlay();
+    render();
+    toast("RANDOMIZED");
+  });
+
   // ─── full Canonical reset (back to the 4-ring RINGS.svg mark)
   $("goCanonical").addEventListener("click", () => {
     // turn off all motion
@@ -1506,8 +1572,13 @@
   buildMotionRows();
   buildSSStateGrid();
   syncAllSliders();
-  // Auto-play with a random preset on fresh loads (skip if user opened a shared URL)
+  // Fresh load: randomize the whole composition + pick a random motion preset.
+  // Variation is the tool's resting state; Canonical button is the revert path.
+  // Shared URLs are honored as-is (no randomization, so links restore exactly).
   if (!fromURL) {
+    randomizeAll();
+    syncAllSliders();
+    syncBandProfileUI();
     const randIdx = Math.floor(Math.random() * SS_STATES.length);
     applySSStateInstant(randIdx);
     state.playing = true;
