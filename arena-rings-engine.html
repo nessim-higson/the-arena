@@ -396,7 +396,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.8</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.9</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -451,7 +451,7 @@
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Position Y</label><span class="val" id="v-py">0.50</span><input id="py" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Rotation</label><span class="val" id="v-rot">0</span><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
-      <div class="row"><label>Scale</label><span class="val" id="v-scale">1.00</span><input id="scale" type="range" min="0.1" max="10" step="0.01" value="1"></div>
+      <div class="row"><label>Scale</label><span class="val" id="v-scale">1.00</span><input id="scale" type="range" min="0.1" max="15" step="0.01" value="1"></div>
       <div class="row"><label>Spacing Curve</label><span class="val" id="v-curve">1.00</span><input id="curve" type="range" min="0.6" max="1.6" step="0.01" value="1.00"></div>
     </fieldset>
 
@@ -684,23 +684,20 @@
     return deltas;
   }
 
-  // Turn a normalized delta into multipliers for band / gap / radius.
-  // Tuned amplitudes (0.6 / 0.25 / 0.4) so even at full variation, the stack
-  // remains coherent and stays inside the canvas.
+  // Turn a normalized delta into a band-thickness multiplier. Profile now ONLY
+  // affects the visible band weight per ring — not the gap, not the corner
+  // radius, not the ring's outer perimeter position. This is why clicking
+  // between profiles no longer makes the composition shift: every ring keeps
+  // its position; only the bands get thicker/thinner.
   function profileFromDelta(delta, amount) {
     const k = delta * amount;
-    return {
-      band:   Math.max(0.2, 1 + k * 0.6),
-      gap:    Math.max(0.2, 1 + k * 0.25),
-      radius: Math.max(0.2, 1 + k * 0.4)
-    };
+    return { band: Math.max(0.2, 1 + k * 0.75) };
   }
 
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Band Profile is applied directly (no lerping) — used to morph over ~0.5s but
-  // the smooth transition combined with anchor-offset recomputing on each ring's
-  // changing size caused the "haywire" mid-transition shifting. Snapping is
-  // predictable: one profile, one composition.
+  // Cumulative growth is profile-INDEPENDENT — rings stay at the same positions
+  // regardless of which Band Profile is active. The profile is stored on each
+  // ring (ring.ps.band) and applied only when rendering the band thickness.
   function computeRings(s) {
     const deltas = computeProfileDeltas(s.N, s.bandProfile);
     const out = [];
@@ -708,11 +705,10 @@
     out.push({ W: w, H: h, R: r, ps: profileFromDelta(deltas[0], s.bandVar) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      const ps = profileFromDelta(deltas[i], s.bandVar);
-      w = w + 2 * (s.bx * ps.band + s.gx * ps.gap * cf);
-      h = h + 2 * (s.by * ps.band + s.gy * ps.gap * cf);
-      r = r + (s.dRb * ps.band + s.dRg * ps.gap * cf) * ps.radius;
-      out.push({ W: w, H: h, R: r, ps });
+      w = w + 2 * (s.bx + s.gx * cf);
+      h = h + 2 * (s.by + s.gy * cf);
+      r = r + s.dRb + s.dRg * cf;
+      out.push({ W: w, H: h, R: r, ps: profileFromDelta(deltas[i], s.bandVar) });
     }
     return out;
   }
@@ -948,14 +944,14 @@
       const drot = cascadeRot + counterRot;
 
       const totalRot = markRot + drot;
-      const ps = ring.ps ?? { band: 1, gap: 1, radius: 1 };
-      // Band Profile drives band thickness AND the visible corner radius —
-      // not just the band, so the whole ring shape responds to the profile.
-      const morphedRingWithRadius = { W, H, R: R * ps.radius };
+      const ps = ring.ps ?? { band: 1 };
+      // Ring outer size (W,H,R) is profile-independent. Profile only changes
+      // band thickness via ps.band when we draw the path below.
+      const morphedRingWithRadius = { W, H, R };
       const path = ringPath(morphedRingWithRadius, state.bx * ps.band, state.by * ps.band, state.dRb * ps.band);
       // Anchor mode offset: shifts each ring so a specific corner/edge stays at (cx,cy)
-      // instead of every ring being centered there. With BOTTOM-RIGHT for example,
-      // ahx=-0.5 and ahy=-0.5 → ring center is up-left of anchor by (W/2, H/2).
+      // instead of every ring being centered there. Uses the natural ring size
+      // (no profile influence), so anchored compositions stay stable across profiles.
       const anchorOffX = ahx * morphedRingWithRadius.W * markScale;
       const anchorOffY = ahy * morphedRingWithRadius.H * markScale;
       const op = opacity < 0.999 ? ` opacity="${opacity.toFixed(3)}"` : "";
@@ -1109,8 +1105,9 @@
     $("bg").setAttribute("width", VW);
     $("bg").setAttribute("height", VH);
     document.documentElement.style.setProperty("--aspect", (VW / VH).toFixed(4));
-    // update format buttons
-    document.querySelectorAll(".format-btn").forEach(b => {
+    // update format buttons — scoped to #formatGrid so we don't also flip
+    // every Band Profile button's active state (they share the .format-btn class)
+    document.querySelectorAll("#formatGrid .format-btn").forEach(b => {
       b.classList.toggle("active", +b.dataset.width === VW && +b.dataset.height === VH);
     });
     // sync custom sliders
@@ -1120,7 +1117,9 @@
   }
 
   window.addEventListener("resize", fitCanvas);
-  document.querySelectorAll(".format-btn").forEach(b => {
+  // Scoped to #formatGrid — otherwise this handler also fires on Band Profile
+  // buttons (same class) and sets fW/fH to NaN, which then breaks the canvas.
+  document.querySelectorAll("#formatGrid .format-btn").forEach(b => {
     b.addEventListener("click", () => {
       state.fW = +b.dataset.width;
       state.fH = +b.dataset.height;
@@ -1153,9 +1152,9 @@
     rings.push({ w, h, r, ps: profileFromDelta(deltas[0], amount) });
     for (let i = 1; i < N; i++) {
       const ps = profileFromDelta(deltas[i], amount);
-      w = w + 2 * (cfg.bx * ps.band + cfg.gx * ps.gap);
-      h = h + 2 * (cfg.by * ps.band + cfg.gy * ps.gap);
-      r = r + (cfg.dRb * ps.band + cfg.dRg * ps.gap) * ps.radius;
+      w = w + 2 * (cfg.bx + cfg.gx);
+      h = h + 2 * (cfg.by + cfg.gy);
+      r = r + cfg.dRb + cfg.dRg;
       rings.push({ w, h, r, ps });
     }
     const last = rings[N - 1];
@@ -1166,7 +1165,7 @@
       d += roundedRect(0, 0, ring.w, ring.h, ring.r);
       const iw = ring.w - 2 * cfg.bx * ring.ps.band;
       const ih = ring.h - 2 * cfg.by * ring.ps.band;
-      const ir = Math.max(0, (ring.r - cfg.dRb * ring.ps.band) * ring.ps.radius);
+      const ir = Math.max(0, ring.r - cfg.dRb * ring.ps.band);
       if (iw > 0 && ih > 0) d += " " + roundedRect(0, 0, iw, ih, ir);
     }
     return `<svg class="prof-icon" viewBox="${(-vw/2).toFixed(2)} ${(-vh/2).toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}" preserveAspectRatio="xMidYMid meet"><path d="${d}" fill-rule="evenodd"/></svg>`;
@@ -1643,15 +1642,26 @@
       motions: ["TILT", "BREATH", "MORPH PULSE", "TILT + BREATH"]
     },
     {
-      name: "VIEWPORT BREAK",  // ★ NEW: rings intentionally extend beyond canvas
-      weight: 0.20,             // weighted high so it appears ~1 in 5 rolls
-      N: [10, 22],
+      name: "VIEWPORT BREAK",  // rings break the frame in multiple directions
+      weight: 0.18,
+      N: [12, 28],
       bx: [4, 12], by: [12, 28], gx: [40, 90], gy: [20, 40],
-      scale: [4.0, 9.0],        // dramatic overflow
+      scale: [5.0, 12.0],       // much more dramatic overflow than before
       anchorAspect: "any",
       positions: "center-heavy",
-      autoFit: false,           // skip the shrink-to-fit clamp
+      autoFit: false,
       motions: ["TILT", "BREATH", "DRIFT", "MORPH PULSE", "CASCADE"]
+    },
+    {
+      name: "RIPPLE",          // ★ NEW: many rings flooding outward like a stone-in-pond
+      weight: 0.10,
+      N: [28, 50],
+      bx: [3, 7], by: [6, 15], gx: [28, 60], gy: [12, 28],
+      scale: [3.0, 7.0],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      autoFit: false,
+      motions: ["CASCADE", "MORPH PULSE", "GROW", "BREATH"]
     },
     {
       name: "TINY",           // ★ NEW: small contained mark, lots of negative space
