@@ -362,7 +362,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.2</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.3</span> · <span id="buildDate">15 MAY 2026</span></div>
     <button class="canonical-btn" id="goCanonical">↩ Canonical Mark</button>
 
     <fieldset class="collapsible collapsed">
@@ -547,7 +547,11 @@
   const CANONICAL_BRAND = {
     N: 4,
     px: 0.5, py: 0.5,
-    rot: 0, scale: 1.0,
+    rot: 0,
+    // scale 2.0 so the 4-ring mark fills ~77% of a 16:9 frame on first render.
+    // The recipe (W/H/R/band/gap) stays at exact RINGS.svg values — the
+    // proportions are the brand's source of truth; the scale is presentation.
+    scale: 2.0,
     curve: 1.0,
     bW: 228, bH: 126, bR: 29,
     bx: 8.6, by: 24.5, dRb: 10.7,
@@ -1146,7 +1150,15 @@
   }
   document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
     b.addEventListener("click", () => {
-      state.bandProfile = b.dataset.profile;
+      const newProfile = b.dataset.profile;
+      state.bandProfile = newProfile;
+      // Auto-ramp variation when a non-Uniform profile is picked so the choice
+      // is visible. Canonical sets bandVar=0; without this, clicking Tiered/
+      // Hourglass/etc. after Canonical would have no visible effect (0 × anything
+      // = 0). If the user has explicitly dialed variation higher, respect that.
+      if (newProfile !== "UNIFORM" && state.bandVar < 0.35) {
+        state.bandVar = 0.55;
+      }
       syncBandProfileUI();
       render();
     });
