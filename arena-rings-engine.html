@@ -53,23 +53,57 @@
   }
   fieldset {
     border: 0;
-    border-top: 1px solid var(--line);
-    padding: 14px 0 10px;
+    border-top: 1px solid #262626;
+    padding: 0;
     margin: 0;
   }
-  fieldset:first-of-type { border-top: 0; padding-top: 0; }
+  fieldset:first-of-type { border-top: 0; }
   legend {
     color: var(--muted);
     font-size: 10px;
     letter-spacing: 0.22em;
     text-transform: uppercase;
-    padding: 0 0 12px;
+    padding: 14px 0 14px;
     width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
   legend .actions { display: flex; gap: 4px; }
+  /* Non-collapsible fieldsets still need their content padded */
+  fieldset:not(.collapsible) {
+    padding-bottom: 12px;
+  }
+  /* Collapsible-specific: prominent header strip, content padded only when open */
+  fieldset.collapsible > legend {
+    font-weight: 600;
+    color: var(--fg);
+    font-size: 10.5px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 100ms;
+  }
+  fieldset.collapsible.collapsed > legend { color: var(--muted); }
+  fieldset.collapsible > legend:hover { background: rgba(255,255,255,0.025); }
+  fieldset.collapsible > *:not(legend) {
+    padding-bottom: 14px;
+  }
+  fieldset.collapsible.collapsed > *:not(legend) {
+    display: none;
+  }
+  fieldset.collapsible > legend::before {
+    content: "▾";
+    display: inline-block;
+    width: 14px;
+    margin-right: 6px;
+    font-size: 10px;
+    opacity: 0.8;
+    transition: transform 120ms;
+  }
+  fieldset.collapsible.collapsed > legend::before {
+    content: "▸";
+    opacity: 0.55;
+  }
   .row {
     display: grid;
     grid-template-columns: 1fr 56px;
@@ -172,30 +206,6 @@
   svg#canvas {
     box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
   }
-  /* collapsible fieldsets */
-  fieldset.collapsible > *:not(legend) {
-    transition: opacity 120ms;
-  }
-  fieldset.collapsible.collapsed > *:not(legend) {
-    display: none;
-  }
-  fieldset.collapsible > legend {
-    cursor: pointer;
-    user-select: none;
-  }
-  fieldset.collapsible > legend::before {
-    content: "▾";
-    display: inline-block;
-    width: 12px;
-    margin-right: 4px;
-    opacity: 0.6;
-    font-size: 9px;
-    text-align: center;
-  }
-  fieldset.collapsible.collapsed > legend::before {
-    content: "▸";
-  }
-  fieldset.collapsible > legend:hover { color: var(--fg); }
   /* prominent "back to brand baseline" button */
   .canonical-btn {
     display: block;
@@ -213,6 +223,25 @@
   }
   .canonical-btn:hover { border-color: var(--fg); }
   .canonical-btn:active { background: var(--fg); color: var(--bg); }
+  /* 3x3 position grid: quick anchor placement on canvas */
+  .pos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .pos-btn {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 8px 0;
+    font: 14px/1 ui-monospace, monospace;
+    cursor: pointer;
+    transition: border-color 80ms, color 80ms, background 80ms;
+  }
+  .pos-btn:hover { border-color: var(--muted); color: var(--fg); }
+  .pos-btn.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   #stage::before {
     content: "";
     position: absolute; inset: 0;
@@ -333,10 +362,10 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.1</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.2</span> · <span id="buildDate">15 MAY 2026</span></div>
     <button class="canonical-btn" id="goCanonical">↩ Canonical Mark</button>
 
-    <fieldset class="collapsible">
+    <fieldset class="collapsible collapsed">
       <legend>Format</legend>
       <div class="format-grid" id="formatGrid">
         <button class="format-btn active" data-width="1920" data-height="1080">16:9<span class="sub">1920×1080</span></button>
@@ -350,7 +379,7 @@
       <div class="row"><label>Custom H</label><span class="val" id="v-fH">1080</span><input id="fH" type="range" min="540" max="6000" step="20" value="1080"></div>
     </fieldset>
 
-    <fieldset class="collapsible">
+    <fieldset class="collapsible collapsed">
       <legend>Stack
         <span class="actions">
           <button class="btn tiny" id="remixStack">Remix</button>
@@ -358,6 +387,18 @@
         </span>
       </legend>
       <div class="row"><label>Ring Count</label><span class="val" id="v-N">22</span><input id="N" type="range" min="1" max="60" step="1" value="22"></div>
+      <div class="row"><label>Position</label><span class="val">XY</span></div>
+      <div class="pos-grid">
+        <button class="pos-btn" data-px="0.2" data-py="0.2" title="Top-Left">↖</button>
+        <button class="pos-btn" data-px="0.5" data-py="0.2" title="Top">↑</button>
+        <button class="pos-btn" data-px="0.8" data-py="0.2" title="Top-Right">↗</button>
+        <button class="pos-btn" data-px="0.2" data-py="0.5" title="Left">←</button>
+        <button class="pos-btn active" data-px="0.5" data-py="0.5" title="Center">●</button>
+        <button class="pos-btn" data-px="0.8" data-py="0.5" title="Right">→</button>
+        <button class="pos-btn" data-px="0.2" data-py="0.8" title="Bottom-Left">↙</button>
+        <button class="pos-btn" data-px="0.5" data-py="0.8" title="Bottom">↓</button>
+        <button class="pos-btn" data-px="0.8" data-py="0.8" title="Bottom-Right">↘</button>
+      </div>
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Position Y</label><span class="val" id="v-py">0.50</span><input id="py" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Rotation</label><span class="val" id="v-rot">0</span><input id="rot" type="range" min="-180" max="180" step="1" value="0"></div>
@@ -381,7 +422,7 @@
       <div class="row"><label>Gap H</label><span class="val" id="v-gx">28</span><input id="gx" type="range" min="0" max="160" step="0.5" value="28"></div>
     </fieldset>
 
-    <fieldset class="collapsible">
+    <fieldset class="collapsible collapsed">
       <legend>Band Profile
         <span class="actions">
           <button class="btn tiny" id="remixProfile">Remix</button>
@@ -1233,6 +1274,7 @@
     });
     document.querySelectorAll(".swatches[data-target='bg'] .swatch-pick").forEach(s => s.classList.toggle("active", s.dataset.c === state.bg));
     document.querySelectorAll(".swatches[data-target='fg'] .swatch-pick").forEach(s => s.classList.toggle("active", s.dataset.c === state.color));
+    if (typeof syncPosGrid === "function") syncPosGrid();
   }
 
   // ─── export
@@ -1332,6 +1374,24 @@
     legend.addEventListener("click", e => {
       if (e.target.closest("button")) return;
       legend.parentElement.classList.toggle("collapsed");
+    });
+  });
+
+  // ─── position quick-grid: 3×3 placement
+  function syncPosGrid() {
+    document.querySelectorAll(".pos-btn").forEach(b => {
+      const tx = parseFloat(b.dataset.px), ty = parseFloat(b.dataset.py);
+      const dx = Math.abs(state.px - tx), dy = Math.abs(state.py - ty);
+      b.classList.toggle("active", dx < 0.01 && dy < 0.01);
+    });
+  }
+  document.querySelectorAll(".pos-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.px = parseFloat(b.dataset.px);
+      state.py = parseFloat(b.dataset.py);
+      syncAllSliders();
+      syncPosGrid();
+      render();
     });
   });
 
