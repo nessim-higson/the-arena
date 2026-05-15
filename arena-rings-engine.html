@@ -196,6 +196,23 @@
     content: "▸";
   }
   fieldset.collapsible > legend:hover { color: var(--fg); }
+  /* prominent "back to brand baseline" button */
+  .canonical-btn {
+    display: block;
+    width: 100%;
+    padding: 12px 10px;
+    margin: 0 0 22px;
+    font: 600 11px/1 ui-monospace, monospace;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms;
+  }
+  .canonical-btn:hover { border-color: var(--fg); }
+  .canonical-btn:active { background: var(--fg); color: var(--bg); }
   #stage::before {
     content: "";
     position: absolute; inset: 0;
@@ -316,9 +333,10 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.0</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.1</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <button class="canonical-btn" id="goCanonical">↩ Canonical Mark</button>
 
-    <fieldset>
+    <fieldset class="collapsible">
       <legend>Format</legend>
       <div class="format-grid" id="formatGrid">
         <button class="format-btn active" data-width="1920" data-height="1080">16:9<span class="sub">1920×1080</span></button>
@@ -336,7 +354,7 @@
       <legend>Stack
         <span class="actions">
           <button class="btn tiny" id="remixStack">Remix</button>
-          <button class="btn tiny" id="reseed">Reset</button>
+          <button class="btn tiny" id="resetStack">Reset</button>
         </span>
       </legend>
       <div class="row"><label>Ring Count</label><span class="val" id="v-N">22</span><input id="N" type="range" min="1" max="60" step="1" value="22"></div>
@@ -347,9 +365,12 @@
       <div class="row"><label>Spacing Curve</label><span class="val" id="v-curve">1.00</span><input id="curve" type="range" min="0.6" max="1.6" step="0.01" value="1.00"></div>
     </fieldset>
 
-    <fieldset class="collapsible">
+    <fieldset class="collapsible collapsed">
       <legend>Anchor Ring
-        <span class="actions"><button class="btn tiny" id="remixAnchor">Remix</button></span>
+        <span class="actions">
+          <button class="btn tiny" id="remixAnchor">Remix</button>
+          <button class="btn tiny" id="resetAnchor">Reset</button>
+        </span>
       </legend>
       <div class="row"><label>Width</label><span class="val" id="v-bW">160</span><input id="bW" type="range" min="20" max="800" step="2" value="160"></div>
       <div class="row"><label>Height</label><span class="val" id="v-bH">90</span><input id="bH" type="range" min="20" max="500" step="2" value="90"></div>
@@ -362,7 +383,10 @@
 
     <fieldset class="collapsible">
       <legend>Band Profile
-        <span class="actions"><button class="btn tiny" id="remixProfile">Remix</button></span>
+        <span class="actions">
+          <button class="btn tiny" id="remixProfile">Remix</button>
+          <button class="btn tiny" id="resetProfile">Reset</button>
+        </span>
       </legend>
       <div class="format-grid" id="bandProfileGrid" style="grid-template-columns:repeat(2,1fr)">
         <button class="format-btn active" data-profile="UNIFORM">Uniform<span class="sub">all equal</span></button>
@@ -396,7 +420,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="collapsible collapsed">
       <legend>Color</legend>
       <div class="row"><label>Stage</label><span class="val">BG</span></div>
       <div class="swatches" data-target="bg">
@@ -436,7 +460,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="collapsible collapsed">
       <legend>Export</legend>
       <div class="btnrow">
         <button class="btn" id="copySVG">Copy SVG</button>
@@ -476,6 +500,20 @@
   let VW = 1920, VH = 1080;
 
   // ─── state
+  // CANONICAL_BRAND = the original 4-ring mark from RINGS.svg. This is the
+  // brand baseline; the Canonical Mark button restores it. Per-section
+  // Reset buttons restore only that section's variables to these values.
+  const CANONICAL_BRAND = {
+    N: 4,
+    px: 0.5, py: 0.5,
+    rot: 0, scale: 1.0,
+    curve: 1.0,
+    bW: 228, bH: 126, bR: 29,
+    bx: 8.6, by: 24.5, dRb: 10.7,
+    gx: 76, gy: 22, dRg: 3.8,
+    bandProfile: "UNIFORM", bandVar: 0
+  };
+
   const DEFAULT_STATE = () => ({
     fW: 1920, fH: 1080,
     N: 22,
@@ -488,6 +526,8 @@
     gx: 28, gy: 14, dRb: 6, dRg: 3,
     bandProfile: "UNIFORM",
     bandVar: 0.5,
+    // smooth Band Profile transitions: current applied deltas lerp toward target
+    currentDeltas: [],
     motion: {
       // accRot fields accumulate rotation only while weight > 0; phases free-run.
       // This decouples each motion's internal time from the global timeAccum,
@@ -562,21 +602,43 @@
   }
 
   // Compute ring outer-edge sizes from anchor (innermost), growing outward.
-  // Per-ring band / gap / radius are shaped by the (zero-sum) Band Profile.
+  // Uses state.currentDeltas (the smoothed per-ring deltas) so profile and
+  // variation changes morph instead of snapping.
   function computeRings(s) {
-    const deltas = computeProfileDeltas(s.N, s.bandProfile);
+    // make sure currentDeltas matches N — initialize from target if size mismatched
+    const targetDeltas = computeProfileDeltas(s.N, s.bandProfile);
+    if (!s.currentDeltas || s.currentDeltas.length !== s.N) {
+      s.currentDeltas = targetDeltas.map(d => d * s.bandVar);
+    }
     const out = [];
     let w = s.bW, h = s.bH, r = s.bR;
-    out.push({ W: w, H: h, R: r, ps: profileFromDelta(deltas[0], s.bandVar) });
+    // Use currentDeltas directly as "delta × variation" (already smoothed).
+    out.push({ W: w, H: h, R: r, ps: profileFromDelta(s.currentDeltas[0], 1) });
     for (let i = 1; i < s.N; i++) {
       const cf = Math.pow(s.curve, i - 1);
-      const ps = profileFromDelta(deltas[i], s.bandVar);
+      const ps = profileFromDelta(s.currentDeltas[i], 1);
       w = w + 2 * (s.bx * ps.band + s.gx * ps.gap * cf);
       h = h + 2 * (s.by * ps.band + s.gy * ps.gap * cf);
       r = r + (s.dRb * ps.band + s.dRg * ps.gap * cf) * ps.radius;
       out.push({ W: w, H: h, R: r, ps });
     }
     return out;
+  }
+
+  // Per-frame: smooth currentDeltas toward (target * variation). Approach rate
+  // gives a ~0.5s morph between profiles, which reads as a deliberate transition
+  // rather than a snap.
+  function smoothProfileDeltas(dt) {
+    const targetDeltas = computeProfileDeltas(state.N, state.bandProfile);
+    if (state.currentDeltas.length !== state.N) {
+      state.currentDeltas = targetDeltas.map(d => d * state.bandVar);
+      return;
+    }
+    const k = 1 - Math.pow(0.84, dt * 60);
+    for (let i = 0; i < state.N; i++) {
+      const target = targetDeltas[i] * state.bandVar;
+      state.currentDeltas[i] += (target - state.currentDeltas[i]) * k;
+    }
   }
 
   function ringPath(ring, bx, by, dRb) {
@@ -735,7 +797,24 @@
     const markRot = state.rot + state.motion.tilt.accRot;
 
     // Breathe uses free-running phase too — speed changes don't cause phase jumps.
-    const markScale = state.scale * (1 + Math.sin(state.motion.breathe.phase) * state.motion.breathe.amount * wBreathe);
+    let markScale = state.scale * (1 + Math.sin(state.motion.breathe.phase) * state.motion.breathe.amount * wBreathe);
+
+    // Auto-fit: if the outermost ring (rotated by current markRot) would exceed
+    // the canvas, shrink markScale so the mark fits at ~94% of the format.
+    // This lets the user click through Band Profiles and never lose the shape
+    // off-screen; the format chosen is honored, the mark adapts to it.
+    {
+      const last = rings[rings.length - 1];
+      const rotRad = (markRot * Math.PI) / 180;
+      const c = Math.abs(Math.cos(rotRad));
+      const sn = Math.abs(Math.sin(rotRad));
+      const rotW = last.W * c + last.H * sn;
+      const rotH = last.H * c + last.W * sn;
+      const reqW = rotW * markScale;
+      const reqH = rotH * markScale;
+      const fit = Math.min(1, (VW * 0.94) / reqW, (VH * 0.94) / reqH);
+      markScale *= fit;
+    }
 
     const morphPhase = state.motion.morph.phase;
     const morphRadius = 1 + Math.sin(morphPhase) * state.motion.morph.amount * wMorph;
@@ -855,6 +934,8 @@
       const target = m.on ? 1 : 0;
       m.weight += (target - m.weight) * k;
     }
+    // Smooth Band Profile transitions: deltas lerp toward target each frame.
+    smoothProfileDeltas(dt);
     if (state.playing) {
       state.timeAccum += dt;
       // Advance each oscillator's phase at its own rate.
@@ -1221,7 +1302,9 @@
       catch (e) { toast("COPY FAILED"); }
     }, 400);
   });
-  $("reseed").addEventListener("click", () => {
+  // The "Reset" button in Export resets the whole engine to factory state
+  // (different from the Canonical Mark button which goes to brand baseline).
+  $("resetBtn").addEventListener("click", () => {
     if (state.playing) togglePlay();
     state = DEFAULT_STATE();
     applyFormat();
@@ -1233,7 +1316,6 @@
     render();
     toast("RESET");
   });
-  $("resetBtn").addEventListener("click", () => $("reseed").click());
 
   // ─── toast
   let toastTimer;
@@ -1291,6 +1373,56 @@
     syncBandProfileUI();
     render();
     toast("PROFILE: " + p);
+  });
+
+  // ─── per-section resets (back to canonical brand baseline)
+  function resetStack() {
+    state.N = CANONICAL_BRAND.N;
+    state.px = CANONICAL_BRAND.px;
+    state.py = CANONICAL_BRAND.py;
+    state.rot = CANONICAL_BRAND.rot;
+    state.scale = CANONICAL_BRAND.scale;
+    state.curve = CANONICAL_BRAND.curve;
+    syncAllSliders();
+    render();
+  }
+  function resetAnchor() {
+    state.bW = CANONICAL_BRAND.bW;
+    state.bH = CANONICAL_BRAND.bH;
+    state.bR = CANONICAL_BRAND.bR;
+    state.bx = CANONICAL_BRAND.bx;
+    state.by = CANONICAL_BRAND.by;
+    state.gx = CANONICAL_BRAND.gx;
+    state.gy = CANONICAL_BRAND.gy;
+    state.dRb = CANONICAL_BRAND.dRb;
+    state.dRg = CANONICAL_BRAND.dRg;
+    syncAllSliders();
+    render();
+  }
+  function resetProfile() {
+    state.bandProfile = CANONICAL_BRAND.bandProfile;
+    state.bandVar = CANONICAL_BRAND.bandVar;
+    syncBandProfileUI();
+    render();
+  }
+  $("resetStack").addEventListener("click", () => { resetStack(); toast("STACK RESET"); });
+  $("resetAnchor").addEventListener("click", () => { resetAnchor(); toast("ANCHOR RESET"); });
+  $("resetProfile").addEventListener("click", () => { resetProfile(); toast("PROFILE RESET"); });
+
+  // ─── full Canonical reset (back to the 4-ring RINGS.svg mark)
+  $("goCanonical").addEventListener("click", () => {
+    // turn off all motion
+    for (const k in state.motion) state.motion[k].on = false;
+    state.screensaver = false;
+    $("ssToggle").classList.remove("on");
+    if (state.playing) togglePlay();
+    // reset all sections
+    resetStack();
+    resetAnchor();
+    resetProfile();
+    syncMotionRowsUI();
+    syncSSStateUI();
+    toast("CANONICAL MARK");
   });
 
   // ─── init
