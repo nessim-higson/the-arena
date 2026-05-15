@@ -396,7 +396,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.9</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.10</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -1191,12 +1191,13 @@
   document.querySelectorAll("#bandProfileGrid .format-btn").forEach(b => {
     b.addEventListener("click", () => {
       const newProfile = b.dataset.profile;
+      const wasUniform = state.bandProfile === "UNIFORM";
       state.bandProfile = newProfile;
-      // Auto-ramp variation when a non-Uniform profile is picked so the choice
-      // is visible. Canonical sets bandVar=0; without this, clicking Tiered/
-      // Hourglass/etc. after Canonical would have no visible effect (0 × anything
-      // = 0). If the user has explicitly dialed variation higher, respect that.
-      if (newProfile !== "UNIFORM" && state.bandVar < 0.35) {
+      // Smart auto-ramp: only nudge bandVar up when going FROM Uniform TO a
+      // profile with character AND variation is currently too low to be visible.
+      // Profile-to-profile transitions (Tiered → Hourglass etc.) respect the
+      // user's current variation, which keeps the visual subtle and stable.
+      if (newProfile !== "UNIFORM" && wasUniform && state.bandVar < 0.35) {
         state.bandVar = 0.55;
       }
       syncBandProfileUI();
@@ -1582,23 +1583,36 @@
       motions: ["TILT", "DRIFT", "COUNTER", "BREATH"]
     },
     {
-      name: "CORNER ECHO",    // ★ rings emanate FROM a corner (image 3 territory)
+      name: "CORNER ECHO",    // rings emanate FROM a corner (image 3 territory)
       weight: 0.16,
-      N: [14, 30],
+      N: [16, 32],
       bx: [4, 10], by: [10, 22], gx: [32, 75], gy: [14, 32],
-      scale: [1.8, 3.0],
+      scale: [2.6, 4.5],       // bumped to fill + slightly overflow the frame
       anchorAspect: "any",
       layout: "corner-emergence",
+      autoFit: false,
       motions: ["TILT", "DRIFT", "CASCADE", "BREATH"]
     },
     {
-      name: "EDGE ECHO",      // ★ rings emanate FROM an edge (image 2 territory)
+      name: "EDGE ECHO",      // rings emanate FROM an edge (image 2 territory)
       weight: 0.12,
-      N: [10, 22],
+      N: [12, 26],
       bx: [4, 10], by: [10, 22], gx: [30, 65], gy: [14, 30],
-      scale: [1.8, 3.0],
+      scale: [2.6, 4.2],
       anchorAspect: "any",
       layout: "edge-emergence",
+      autoFit: false,
+      motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
+    },
+    {
+      name: "FRAME FILL",     // ★ NEW: centered, mark fills + slightly overflows
+      weight: 0.13,            //   the frame (image 2 territory, centered)
+      N: [12, 22],
+      bx: [4, 10], by: [12, 26], gx: [38, 80], gy: [16, 36],
+      scale: [2.8, 4.5],
+      anchorAspect: "any",
+      positions: "center-heavy",
+      autoFit: false,
       motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
     },
     {
@@ -1624,9 +1638,9 @@
     {
       name: "HERO",
       weight: 0.10,
-      N: [5, 11],
+      N: [6, 13],
       bx: [6, 14], by: [14, 30], gx: [40, 85], gy: [18, 40],
-      scale: [2.2, 3.4],
+      scale: [2.6, 4.2],
       anchorAspect: "wide-or-canonical",
       positions: "center-heavy",
       motions: ["TILT", "BREATH", "TILT + BREATH", "MORPH PULSE"]
