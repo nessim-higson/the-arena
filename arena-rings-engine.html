@@ -263,6 +263,19 @@
   }
   .pos-btn:hover { border-color: var(--muted); color: var(--fg); }
   .pos-btn.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  /* Anchor (echo-from) buttons share the .pos-btn style */
+  .anchor-btn {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 8px 0;
+    font: 14px/1 ui-monospace, monospace;
+    cursor: pointer;
+    transition: border-color 80ms, color 80ms, background 80ms;
+  }
+  .anchor-btn:hover { border-color: var(--muted); color: var(--fg); }
+  .anchor-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   #stage::before {
     content: "";
     position: absolute; inset: 0;
@@ -383,7 +396,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.6</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.7</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -422,6 +435,18 @@
         <button class="pos-btn" data-px="0.2" data-py="0.8" title="Bottom-Left">↙</button>
         <button class="pos-btn" data-px="0.5" data-py="0.8" title="Bottom">↓</button>
         <button class="pos-btn" data-px="0.8" data-py="0.8" title="Bottom-Right">↘</button>
+      </div>
+      <div class="row"><label>Echo From</label><span class="val" id="v-anchorMode">●</span></div>
+      <div class="pos-grid" id="anchorGrid">
+        <button class="anchor-btn" data-anchor="TOP-LEFT" title="Top-left of ring at anchor — rings extend down-right">↖</button>
+        <button class="anchor-btn" data-anchor="TOP-CENTER" title="Top of each ring at anchor — rings extend down">↑</button>
+        <button class="anchor-btn" data-anchor="TOP-RIGHT" title="Top-right of ring at anchor — rings extend down-left">↗</button>
+        <button class="anchor-btn" data-anchor="MIDDLE-LEFT" title="Left edge at anchor — rings extend right">←</button>
+        <button class="anchor-btn active" data-anchor="CENTER" title="Center anchor — concentric (default)">●</button>
+        <button class="anchor-btn" data-anchor="MIDDLE-RIGHT" title="Right edge at anchor — rings extend left">→</button>
+        <button class="anchor-btn" data-anchor="BOTTOM-LEFT" title="Bottom-left of ring at anchor — rings extend up-right">↙</button>
+        <button class="anchor-btn" data-anchor="BOTTOM-CENTER" title="Bottom of each ring at anchor — rings stack up">↓</button>
+        <button class="anchor-btn" data-anchor="BOTTOM-RIGHT" title="Bottom-right at anchor — rings stack up-left">↘</button>
       </div>
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Position Y</label><span class="val" id="v-py">0.50</span><input id="py" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
@@ -572,15 +597,13 @@
     N: 4,
     px: 0.5, py: 0.5,
     rot: 0,
-    // scale 2.0 so the 4-ring mark fills ~77% of a 16:9 frame on first render.
-    // The recipe (W/H/R/band/gap) stays at exact RINGS.svg values — the
-    // proportions are the brand's source of truth; the scale is presentation.
     scale: 2.0,
     curve: 1.0,
     bW: 228, bH: 126, bR: 29,
     bx: 8.6, by: 24.5, dRb: 10.7,
     gx: 76, gy: 22, dRg: 3.8,
-    bandProfile: "UNIFORM", bandVar: 0
+    bandProfile: "UNIFORM", bandVar: 0,
+    anchorMode: "CENTER"
   };
 
   const DEFAULT_STATE = () => ({
@@ -595,6 +618,12 @@
     gx: 28, gy: 14, dRb: 6, dRg: 3,
     bandProfile: "UNIFORM",
     bandVar: 0.5,
+    // Anchor mode controls WHICH POINT OF EACH RING sits at (px, py).
+    // CENTER (default) → rings are concentric, growing symmetrically from the
+    // anchor. BOTTOM-RIGHT → each ring's bottom-right corner is at the anchor,
+    // so they stack up-left from there. This is how to get the "rings emanating
+    // from a corner" composition.
+    anchorMode: "CENTER",
     // smooth Band Profile transitions: current applied deltas lerp toward target
     currentDeltas: [],
     motion: {
@@ -843,6 +872,13 @@
   const root = $("root");
   function render() {
     const rings = computeRings(state);
+    // Anchor mode → per-ring offset multipliers. CENTER = (0,0) — rings concentric.
+    // BOTTOM-RIGHT = (-0.5,-0.5) — each ring's br corner is at the anchor, rings
+    // stack up-left. BOTTOM-CENTER = (0,-0.5) — bottom of each ring at anchor,
+    // rings stack straight up. Etc.
+    const aMode = state.anchorMode || "CENTER";
+    const ahx = aMode.includes("LEFT") ? 0.5 : aMode.includes("RIGHT") ? -0.5 : 0;
+    const ahy = aMode.includes("TOP")  ? 0.5 : aMode.includes("BOTTOM") ? -0.5 : 0;
     // motion weights (smooth fade in/out of each behavior)
     const wTilt    = state.motion.tilt.weight;
     const wBreathe = state.motion.breathe.weight;
@@ -941,8 +977,13 @@
       // not just the band, so the whole ring shape responds to the profile.
       const morphedRingWithRadius = { W, H, R: R * ps.radius };
       const path = ringPath(morphedRingWithRadius, state.bx * ps.band, state.by * ps.band, state.dRb * ps.band);
+      // Anchor mode offset: shifts each ring so a specific corner/edge stays at (cx,cy)
+      // instead of every ring being centered there. With BOTTOM-RIGHT for example,
+      // ahx=-0.5 and ahy=-0.5 → ring center is up-left of anchor by (W/2, H/2).
+      const anchorOffX = ahx * morphedRingWithRadius.W * markScale;
+      const anchorOffY = ahy * morphedRingWithRadius.H * markScale;
       const op = opacity < 0.999 ? ` opacity="${opacity.toFixed(3)}"` : "";
-      svg += `<g transform="translate(${(cx + dx).toFixed(2)} ${(cy + dy).toFixed(2)}) rotate(${totalRot.toFixed(2)}) scale(${markScale.toFixed(4)})"${op}><path d="${path}" fill="${fg}" fill-rule="evenodd"/></g>`;
+      svg += `<g transform="translate(${(cx + dx + anchorOffX).toFixed(2)} ${(cy + dy + anchorOffY).toFixed(2)}) rotate(${totalRot.toFixed(2)}) scale(${markScale.toFixed(4)})"${op}><path d="${path}" fill="${fg}" fill-rule="evenodd"/></g>`;
     }
     root.innerHTML = svg;
 
@@ -1311,6 +1352,7 @@
     document.querySelectorAll(".swatches[data-target='bg'] .swatch-pick").forEach(s => s.classList.toggle("active", s.dataset.c === state.bg));
     document.querySelectorAll(".swatches[data-target='fg'] .swatch-pick").forEach(s => s.classList.toggle("active", s.dataset.c === state.color));
     if (typeof syncPosGrid === "function") syncPosGrid();
+    if (typeof syncAnchorGrid === "function") syncAnchorGrid();
   }
 
   // ─── export
@@ -1344,6 +1386,7 @@
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
         bp: state.bandProfile, bv: state.bandVar,
+        am: state.anchorMode,
         bg: state.bg, fg: state.color,
         m: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [k, [v.on?1:0, v.speed, v.amount]]))
       };
@@ -1359,6 +1402,7 @@
       ["fW","fH","N","px","py","rot","scale","curve","bW","bH","bR","bx","by","gx","gy"].forEach(k => { if (k in obj) state[k] = obj[k]; });
       if (obj.bp) state.bandProfile = obj.bp;
       if (typeof obj.bv === "number") state.bandVar = obj.bv;
+      if (obj.am) state.anchorMode = obj.am;
       if (obj.bg) state.bg = obj.bg;
       if (obj.fg) state.color = obj.fg;
       if (obj.m) {
@@ -1431,6 +1475,26 @@
     });
   });
 
+  // ─── anchor grid (Echo From — which point of each ring sits at the anchor)
+  const ANCHOR_GLYPHS = {
+    "TOP-LEFT":"↖","TOP-CENTER":"↑","TOP-RIGHT":"↗",
+    "MIDDLE-LEFT":"←","CENTER":"●","MIDDLE-RIGHT":"→",
+    "BOTTOM-LEFT":"↙","BOTTOM-CENTER":"↓","BOTTOM-RIGHT":"↘"
+  };
+  function syncAnchorGrid() {
+    document.querySelectorAll(".anchor-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.anchor === (state.anchorMode || "CENTER"));
+    });
+    $("v-anchorMode").textContent = ANCHOR_GLYPHS[state.anchorMode] || "●";
+  }
+  document.querySelectorAll(".anchor-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.anchorMode = b.dataset.anchor;
+      syncAnchorGrid();
+      render();
+    });
+  });
+
   // ─── remix handlers (randomize a section's variables within tasteful ranges)
   function rand(min, max) { return min + Math.random() * (max - min); }
   function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
@@ -1479,7 +1543,9 @@
     state.rot = CANONICAL_BRAND.rot;
     state.scale = CANONICAL_BRAND.scale;
     state.curve = CANONICAL_BRAND.curve;
+    state.anchorMode = CANONICAL_BRAND.anchorMode;
     syncAllSliders();
+    syncAnchorGrid();
     render();
   }
   function resetAnchor() {
@@ -1541,9 +1607,29 @@
       motions: ["TILT", "DRIFT", "COUNTER", "BREATH"]
     },
     {
-      name: "EDGE-ANCHORED",  // ★ NEW: anchor jammed into a corner so rings emanate
-      weight: 0.22,           //   from there (matches reference image 3) — high
-      N: [12, 26],            //   weight so corner compositions appear often.
+      name: "CORNER ECHO",    // ★ rings emanate FROM a corner (image 3 territory)
+      weight: 0.16,
+      N: [14, 30],
+      bx: [4, 10], by: [10, 22], gx: [32, 75], gy: [14, 32],
+      scale: [1.8, 3.0],
+      anchorAspect: "any",
+      layout: "corner-emergence",
+      motions: ["TILT", "DRIFT", "CASCADE", "BREATH"]
+    },
+    {
+      name: "EDGE ECHO",      // ★ rings emanate FROM an edge (image 2 territory)
+      weight: 0.12,
+      N: [10, 22],
+      bx: [4, 10], by: [10, 22], gx: [30, 65], gy: [14, 30],
+      scale: [1.8, 3.0],
+      anchorAspect: "any",
+      layout: "edge-emergence",
+      motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
+    },
+    {
+      name: "EDGE-ANCHORED",  // anchor at canvas corner but rings still concentric
+      weight: 0.10,
+      N: [12, 26],
       bx: [4, 10], by: [10, 22], gx: [30, 70], gy: [14, 32],
       scale: [1.6, 2.6],
       anchorAspect: "any",
@@ -1679,10 +1765,31 @@
     state.scale = rand(mood.scale[0], mood.scale[1]);
     state.curve = rand(0.92, 1.10);
 
-    // Position
-    const pos = pickPosition(mood.positions);
-    state.px = pos[0];
-    state.py = pos[1];
+    // Position + anchorMode (coupled for "echo from corner/edge" layouts)
+    if (mood.layout === "corner-emergence") {
+      const corners = [
+        { p: [0.20, 0.20], a: "TOP-LEFT" },
+        { p: [0.80, 0.20], a: "TOP-RIGHT" },
+        { p: [0.20, 0.80], a: "BOTTOM-LEFT" },
+        { p: [0.80, 0.80], a: "BOTTOM-RIGHT" }
+      ];
+      const c = corners[Math.floor(Math.random() * 4)];
+      state.px = c.p[0]; state.py = c.p[1]; state.anchorMode = c.a;
+    } else if (mood.layout === "edge-emergence") {
+      const edges = [
+        { p: [0.5, 0.85], a: "BOTTOM-CENTER" },
+        { p: [0.5, 0.15], a: "TOP-CENTER" },
+        { p: [0.85, 0.5], a: "MIDDLE-RIGHT" },
+        { p: [0.15, 0.5], a: "MIDDLE-LEFT" }
+      ];
+      const e = edges[Math.floor(Math.random() * 4)];
+      state.px = e.p[0]; state.py = e.p[1]; state.anchorMode = e.a;
+    } else {
+      const pos = pickPosition(mood.positions);
+      state.px = pos[0];
+      state.py = pos[1];
+      state.anchorMode = "CENTER";
+    }
 
     // Anchor — shape category × the mood's band/gap ranges
     const shape = pickAnchorShape(mood.anchorAspect);
