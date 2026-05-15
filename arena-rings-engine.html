@@ -346,6 +346,59 @@
   }
   .anchor-btn:hover { border-color: var(--muted); color: var(--fg); }
   .anchor-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  /* Echo From — prominent section with 2D anchor pad */
+  .echo-section {
+    border: 1px solid var(--accent);
+    background: rgba(255,58,31,0.04);
+    padding: 12px 10px;
+    margin: 0 0 14px;
+  }
+  .echo-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font: 700 11px/1 ui-monospace, monospace;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg);
+    margin-bottom: 10px;
+  }
+  .echo-sub {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: none;
+  }
+  .echo-title .val { color: var(--accent); margin-left: auto; font-weight: 700; }
+  .anchor-pad {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line);
+    cursor: crosshair;
+    margin-bottom: 8px;
+  }
+  .anchor-pad::before,
+  .anchor-pad::after {
+    content: "";
+    position: absolute;
+    background: rgba(255,255,255,0.12);
+    pointer-events: none;
+  }
+  .anchor-pad::before { top: 50%; left: 0; right: 0; height: 1px; margin-top: -0.5px; }
+  .anchor-pad::after  { left: 50%; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; }
+  .anchor-pad-dot {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border: 2px solid var(--fg);
+    margin: -7px 0 0 -7px;
+    pointer-events: none;
+    box-sizing: border-box;
+  }
   /* fit-mode trio: TIGHT / AUTO / LOOSE */
   .fit-grid {
     display: grid;
@@ -487,7 +540,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.15</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.16</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -518,6 +571,27 @@
           <button class="btn tiny" id="resetStack">Reset</button>
         </span>
       </legend>
+      <div class="echo-section">
+        <div class="echo-title">
+          <span>Echo From</span>
+          <span class="echo-sub">where rings emanate from</span>
+          <span class="val" id="v-anchorMode">CENTER</span>
+        </div>
+        <div class="anchor-pad" id="anchorPad" title="Click or drag anywhere to position the anchor on the ring">
+          <div class="anchor-pad-dot" id="anchorDot"></div>
+        </div>
+        <div class="pos-grid" id="anchorGrid">
+          <button class="anchor-btn" data-ahx="0.5" data-ahy="0.5" title="Anchor at top-left of ring">↖</button>
+          <button class="anchor-btn" data-ahx="0" data-ahy="0.5" title="Anchor at top edge">↑</button>
+          <button class="anchor-btn" data-ahx="-0.5" data-ahy="0.5" title="Anchor at top-right">↗</button>
+          <button class="anchor-btn" data-ahx="0.5" data-ahy="0" title="Anchor at left edge">←</button>
+          <button class="anchor-btn active" data-ahx="0" data-ahy="0" title="Anchor at center (concentric)">●</button>
+          <button class="anchor-btn" data-ahx="-0.5" data-ahy="0" title="Anchor at right edge">→</button>
+          <button class="anchor-btn" data-ahx="0.5" data-ahy="-0.5" title="Anchor at bottom-left">↙</button>
+          <button class="anchor-btn" data-ahx="0" data-ahy="-0.5" title="Anchor at bottom edge">↓</button>
+          <button class="anchor-btn" data-ahx="-0.5" data-ahy="-0.5" title="Anchor at bottom-right">↘</button>
+        </div>
+      </div>
       <div class="row"><label>Ring Count</label><span class="val" id="v-N">22</span><input id="N" type="range" min="1" max="60" step="1" value="22"></div>
       <div class="row"><label>Position</label><span class="val">XY</span></div>
       <div class="pos-grid">
@@ -540,18 +614,6 @@
       <div class="row"><label>Lock Rotation</label><span class="val" id="v-lockRot">OFF</span></div>
       <div class="fit-grid" style="grid-template-columns:1fr">
         <button class="fit-btn" id="lockRotBtn" title="Pins rotation at 0 and disables tilt / counter / cascade motions">↻ Lock Rotation</button>
-      </div>
-      <div class="row"><label>Echo From</label><span class="val" id="v-anchorMode">●</span></div>
-      <div class="pos-grid" id="anchorGrid">
-        <button class="anchor-btn" data-anchor="TOP-LEFT" title="Top-left of ring at anchor — rings extend down-right">↖</button>
-        <button class="anchor-btn" data-anchor="TOP-CENTER" title="Top of each ring at anchor — rings extend down">↑</button>
-        <button class="anchor-btn" data-anchor="TOP-RIGHT" title="Top-right of ring at anchor — rings extend down-left">↗</button>
-        <button class="anchor-btn" data-anchor="MIDDLE-LEFT" title="Left edge at anchor — rings extend right">←</button>
-        <button class="anchor-btn active" data-anchor="CENTER" title="Center anchor — concentric (default)">●</button>
-        <button class="anchor-btn" data-anchor="MIDDLE-RIGHT" title="Right edge at anchor — rings extend left">→</button>
-        <button class="anchor-btn" data-anchor="BOTTOM-LEFT" title="Bottom-left of ring at anchor — rings extend up-right">↙</button>
-        <button class="anchor-btn" data-anchor="BOTTOM-CENTER" title="Bottom of each ring at anchor — rings stack up">↓</button>
-        <button class="anchor-btn" data-anchor="BOTTOM-RIGHT" title="Bottom-right at anchor — rings stack up-left">↘</button>
       </div>
       <div class="row"><label>Position X</label><span class="val" id="v-px">0.50</span><input id="px" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
       <div class="row"><label>Position Y</label><span class="val" id="v-py">0.50</span><input id="py" type="range" min="-0.5" max="1.5" step="0.005" value="0.5"></div>
@@ -701,7 +763,7 @@
     bx: 8.6, by: 24.5, dRb: 10.7,
     gx: 76, gy: 22, dRg: 3.8,
     bandProfile: "UNIFORM", bandVar: 0,
-    anchorMode: "CENTER",
+    ahx: 0, ahy: 0,
     fitMode: "AUTO",
     lockRotation: false
   };
@@ -718,7 +780,11 @@
     gx: 28, gy: 14, dRb: 6, dRg: 3,
     bandProfile: "UNIFORM",
     bandVar: 0.5,
-    anchorMode: "CENTER",
+    // Continuous anchor offset: which point of each ring sits at (px,py).
+    // ahx in [-0.5, 0.5]: 0=ring center, 0.5=ring's left edge at anchor (rings
+    // extend right), -0.5=right edge anchor (extend left). Same for ahy.
+    ahx: 0,
+    ahy: 0,
     fitMode: "AUTO",
     // When true: rotation locked at 0, slider disabled, and rotational motion
     // behaviors (TILT / COUNTER / CASCADE) auto-off. For "calm, anchored" looks
@@ -965,13 +1031,14 @@
   const root = $("root");
   function render() {
     const rings = computeRings(state);
-    // Anchor mode → per-ring offset multipliers. CENTER = (0,0) — rings concentric.
-    // BOTTOM-RIGHT = (-0.5,-0.5) — each ring's br corner is at the anchor, rings
-    // stack up-left. BOTTOM-CENTER = (0,-0.5) — bottom of each ring at anchor,
-    // rings stack straight up. Etc.
-    const aMode = state.anchorMode || "CENTER";
-    const ahx = aMode.includes("LEFT") ? 0.5 : aMode.includes("RIGHT") ? -0.5 : 0;
-    const ahy = aMode.includes("TOP")  ? 0.5 : aMode.includes("BOTTOM") ? -0.5 : 0;
+    // Continuous anchor offset: state.ahx / state.ahy in [-0.5, 0.5]
+    //   ahx=0, ahy=0  → ring center at anchor (concentric)
+    //   ahx=0.5       → ring's left edge at anchor, rings extend right
+    //   ahx=-0.5      → ring's right edge at anchor, rings extend left
+    //   ahy=0.5 / -0.5 → top / bottom edge at anchor, same idea
+    // Any value in between gives a continuous anchor position.
+    const ahx = state.ahx ?? 0;
+    const ahy = state.ahy ?? 0;
     // motion weights (smooth fade in/out of each behavior)
     const wTilt    = state.motion.tilt.weight;
     const wBreathe = state.motion.breathe.weight;
@@ -1513,7 +1580,8 @@
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
         bp: state.bandProfile, bv: state.bandVar,
-        am: state.anchorMode, fm: state.fitMode, lr: state.lockRotation ? 1 : 0,
+        ax: state.ahx, ay: state.ahy,
+        fm: state.fitMode, lr: state.lockRotation ? 1 : 0,
         bg: state.bg, fg: state.color,
         m: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [k, [v.on?1:0, v.speed, v.amount]]))
       };
@@ -1529,7 +1597,17 @@
       ["fW","fH","N","px","py","rot","scale","curve","bW","bH","bR","bx","by","gx","gy"].forEach(k => { if (k in obj) state[k] = obj[k]; });
       if (obj.bp) state.bandProfile = obj.bp;
       if (typeof obj.bv === "number") state.bandVar = obj.bv;
-      if (obj.am) state.anchorMode = obj.am;
+      if (typeof obj.ax === "number") state.ahx = obj.ax;
+      if (typeof obj.ay === "number") state.ahy = obj.ay;
+      // Backward compat: old URLs encoded anchor as string "am"
+      if (obj.am && state.ahx === 0 && state.ahy === 0) {
+        const legacy = {
+          "TOP-LEFT":[0.5,0.5],"TOP-CENTER":[0,0.5],"TOP-RIGHT":[-0.5,0.5],
+          "MIDDLE-LEFT":[0.5,0],"CENTER":[0,0],"MIDDLE-RIGHT":[-0.5,0],
+          "BOTTOM-LEFT":[0.5,-0.5],"BOTTOM-CENTER":[0,-0.5],"BOTTOM-RIGHT":[-0.5,-0.5]
+        }[obj.am];
+        if (legacy) { state.ahx = legacy[0]; state.ahy = legacy[1]; }
+      }
       if (obj.fm) state.fitMode = obj.fm;
       if (typeof obj.lr === "number") state.lockRotation = !!obj.lr;
       if (obj.bg) state.bg = obj.bg;
@@ -1642,25 +1720,68 @@
     render();
   });
 
-  // ─── anchor grid (Echo From — which point of each ring sits at the anchor)
-  const ANCHOR_GLYPHS = {
-    "TOP-LEFT":"↖","TOP-CENTER":"↑","TOP-RIGHT":"↗",
-    "MIDDLE-LEFT":"←","CENTER":"●","MIDDLE-RIGHT":"→",
-    "BOTTOM-LEFT":"↙","BOTTOM-CENTER":"↓","BOTTOM-RIGHT":"↘"
-  };
+  // ─── Echo From — continuous ahx/ahy, 2D pad, and 9 snap-presets
+  // Map (ahx, ahy) to a readable label for the readout.
+  function describeAnchor(ahx, ahy) {
+    if (Math.abs(ahx) < 0.10 && Math.abs(ahy) < 0.10) return "CENTER";
+    const hPart = ahx > 0.30 ? "LEFT" : ahx < -0.30 ? "RIGHT" : ahy === 0 ? "MIDDLE" : "CENTER";
+    const vPart = ahy > 0.30 ? "TOP"  : ahy < -0.30 ? "BOTTOM" : "MIDDLE";
+    // Snap-name when close to a preset
+    if (Math.abs(ahx) > 0.40 || Math.abs(ahy) > 0.40) {
+      const h = ahx > 0.30 ? "LEFT" : ahx < -0.30 ? "RIGHT" : "CENTER";
+      const v = ahy > 0.30 ? "TOP"  : ahy < -0.30 ? "BOTTOM" : "MIDDLE";
+      if (h === "CENTER" && v === "MIDDLE") return "CENTER";
+      if (h === "CENTER") return v + "-CENTER";
+      if (v === "MIDDLE") return "MIDDLE-" + h;
+      return v + "-" + h;
+    }
+    return "CUSTOM";
+  }
   function syncAnchorGrid() {
     document.querySelectorAll(".anchor-btn").forEach(b => {
-      b.classList.toggle("active", b.dataset.anchor === (state.anchorMode || "CENTER"));
+      const bx = parseFloat(b.dataset.ahx);
+      const by = parseFloat(b.dataset.ahy);
+      const isActive = Math.abs(bx - state.ahx) < 0.05 && Math.abs(by - state.ahy) < 0.05;
+      b.classList.toggle("active", isActive);
     });
-    $("v-anchorMode").textContent = ANCHOR_GLYPHS[state.anchorMode] || "●";
+    $("v-anchorMode").textContent = describeAnchor(state.ahx, state.ahy);
+    // Position the dot on the pad
+    const dot = $("anchorDot");
+    if (dot) {
+      // ahx = 0.5 (left edge at anchor) → dot at LEFT of pad
+      // ahx = -0.5 → dot at RIGHT of pad
+      const left = (0.5 - state.ahx) * 100;
+      const top  = (0.5 - state.ahy) * 100;
+      dot.style.left = left + "%";
+      dot.style.top  = top + "%";
+    }
   }
   document.querySelectorAll(".anchor-btn").forEach(b => {
     b.addEventListener("click", () => {
-      state.anchorMode = b.dataset.anchor;
+      state.ahx = parseFloat(b.dataset.ahx);
+      state.ahy = parseFloat(b.dataset.ahy);
       syncAnchorGrid();
       render();
     });
   });
+
+  // 2D pad — click or drag to set continuous anchor position
+  const pad = $("anchorPad");
+  if (pad) {
+    let dragging = false;
+    function padToOffsets(e) {
+      const rect = pad.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top)  / rect.height;
+      state.ahx = Math.max(-0.5, Math.min(0.5, 0.5 - x));
+      state.ahy = Math.max(-0.5, Math.min(0.5, 0.5 - y));
+      syncAnchorGrid();
+      render();
+    }
+    pad.addEventListener("mousedown", e => { dragging = true; padToOffsets(e); e.preventDefault(); });
+    window.addEventListener("mousemove", e => { if (dragging) padToOffsets(e); });
+    window.addEventListener("mouseup", () => dragging = false);
+  }
 
   // ─── remix handlers (randomize a section's variables within tasteful ranges)
   function rand(min, max) { return min + Math.random() * (max - min); }
@@ -1710,7 +1831,8 @@
     state.rot = CANONICAL_BRAND.rot;
     state.scale = CANONICAL_BRAND.scale;
     state.curve = CANONICAL_BRAND.curve;
-    state.anchorMode = CANONICAL_BRAND.anchorMode;
+    state.ahx = CANONICAL_BRAND.ahx;
+    state.ahy = CANONICAL_BRAND.ahy;
     state.fitMode = CANONICAL_BRAND.fitMode;
     state.lockRotation = CANONICAL_BRAND.lockRotation;
     syncAllSliders();
@@ -2043,34 +2165,42 @@
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
     if (mood.layout === "corner-emergence") {
-      // Even softer — anchor lives around 36/64 with ±0.08 jitter so each
-      // randomize lands at a slightly different spot.
+      // Continuous anchor with jitter — never the same exact spot twice.
       const corners = [
-        { p: [0.36, 0.36], a: "TOP-LEFT" },
-        { p: [0.64, 0.36], a: "TOP-RIGHT" },
-        { p: [0.36, 0.64], a: "BOTTOM-LEFT" },
-        { p: [0.64, 0.64], a: "BOTTOM-RIGHT" }
+        { px: 0.36, py: 0.36, ahx:  0.5, ahy:  0.5 },  // top-left
+        { px: 0.64, py: 0.36, ahx: -0.5, ahy:  0.5 },  // top-right
+        { px: 0.36, py: 0.64, ahx:  0.5, ahy: -0.5 },  // bottom-left
+        { px: 0.64, py: 0.64, ahx: -0.5, ahy: -0.5 }   // bottom-right
       ];
       const c = corners[Math.floor(Math.random() * 4)];
-      state.px = jitter(c.p[0], 0.16);
-      state.py = jitter(c.p[1], 0.16);
-      state.anchorMode = c.a;
+      state.px = jitter(c.px, 0.16);
+      state.py = jitter(c.py, 0.16);
+      state.ahx = Math.max(-0.5, Math.min(0.5, jitter(c.ahx, 0.18)));
+      state.ahy = Math.max(-0.5, Math.min(0.5, jitter(c.ahy, 0.18)));
     } else if (mood.layout === "edge-emergence") {
       const edges = [
-        { p: [0.5,  0.68], a: "BOTTOM-CENTER" },
-        { p: [0.5,  0.32], a: "TOP-CENTER" },
-        { p: [0.68, 0.5 ], a: "MIDDLE-RIGHT" },
-        { p: [0.32, 0.5 ], a: "MIDDLE-LEFT" }
+        { px: 0.5,  py: 0.68, ahx:  0,   ahy: -0.5 },
+        { px: 0.5,  py: 0.32, ahx:  0,   ahy:  0.5 },
+        { px: 0.68, py: 0.5,  ahx: -0.5, ahy:  0 },
+        { px: 0.32, py: 0.5,  ahx:  0.5, ahy:  0 }
       ];
       const e = edges[Math.floor(Math.random() * 4)];
-      state.px = jitter(e.p[0], 0.12);
-      state.py = jitter(e.p[1], 0.12);
-      state.anchorMode = e.a;
+      state.px = jitter(e.px, 0.12);
+      state.py = jitter(e.py, 0.12);
+      state.ahx = Math.max(-0.5, Math.min(0.5, jitter(e.ahx, 0.18)));
+      state.ahy = Math.max(-0.5, Math.min(0.5, jitter(e.ahy, 0.18)));
     } else {
       const pos = pickPosition(mood.positions);
       state.px = pos[0];
       state.py = pos[1];
-      state.anchorMode = "CENTER";
+      // For center-style moods, mostly center anchor but occasionally subtle drift
+      if (Math.random() < 0.18) {
+        state.ahx = jitter(0, 0.30);
+        state.ahy = jitter(0, 0.30);
+      } else {
+        state.ahx = 0;
+        state.ahy = 0;
+      }
     }
     // Fit mode per mood: defaults to AUTO; overflow moods set LOOSE; new
     // TIGHT-contained mood sets TIGHT.
