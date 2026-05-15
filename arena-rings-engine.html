@@ -540,7 +540,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.17</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.18</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -734,7 +734,7 @@
       ECHO <b id="meta-echo">CENTER</b><br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v1.17</span>
+      <span style="opacity:0.45">BUILD v1.18</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -2030,29 +2030,31 @@
     {
       name: "CENTERED",
       weight: 0.05,
-      N: [10, 20],
-      bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
+      N: [8, 22],
+      bx: [3, 14], by: [10, 30], gx: [22, 90], gy: [10, 36],
       scale: [6, 10],
-      anchorAspect: "any",
+      anchorAspect: "wide-or-canonical",  // base shape; fillViewport locks aspect after
       positions: "center-heavy",
       fitMode: "TIGHT",
       lockRotation: true,
-      anchorCentered: true,    // force ahx=ahy=0 (no drift) — fills the frame
-      anchorCenterPosition: true, // also pin px=py=0.5 so TIGHT can fill edges
+      anchorCentered: true,        // force ahx=ahy=0 (no drift) — fills the frame
+      anchorCenterPosition: true,  // pin px=py=0.5 so TIGHT can fill both edges
+      fillViewport: true,          // lock outer-ring aspect to canvas aspect
       motions: ["BREATH", "MORPH PULSE"]
     },
     {
       name: "ROTATED",
       weight: 0.05,
-      N: [10, 20],
-      bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
+      N: [8, 22],
+      bx: [3, 14], by: [10, 30], gx: [22, 90], gy: [10, 36],
       scale: [6, 10],
-      anchorAspect: "any",
+      anchorAspect: "wide-or-canonical",
       positions: "center-heavy",
       fitMode: "TIGHT",
-      rotRange: [18, 38],
+      rotRange: [12, 22],   // capped: above ~22° a 16:9 outer ring can't fill both axes
       anchorCentered: true,
       anchorCenterPosition: true,
+      fillViewport: true,
       motions: ["TILT", "BREATH", "MORPH PULSE"]
     },
     {
@@ -2230,6 +2232,33 @@
     state.by = rand(mood.by[0], mood.by[1]);
     state.gx = rand(mood.gx[0], mood.gx[1]);
     state.gy = rand(mood.gy[0], mood.gy[1]);
+
+    // fillViewport: lock every dimension's height to the canvas aspect ratio so the
+    // outermost ring always fills the frame (paired with TIGHT). Accounts for any
+    // rotation chosen above so ROTATED still fills edge-to-edge. Variety still lives
+    // in ring count, band thickness, gap rate, profile, and motion — but the mark's
+    // aspect ratio always matches the viewport. Without this, picking a wide vs.
+    // tall anchor shape made compositions seem to "bounce" inside the frame.
+    if (mood.fillViewport) {
+      const canvasAspect = VW / VH;
+      const θ = (state.rot * Math.PI) / 180;
+      const c = Math.abs(Math.cos(θ));
+      const s = Math.abs(Math.sin(θ));
+      // Solve un-rotated outer aspect so the rotated bounding box matches canvas.
+      // ratio = (α·c − s) / (c − α·s). Collapses to α when rotation is 0.
+      let targetAspect = canvasAspect;
+      const denom = c - canvasAspect * s;
+      if (denom > 0.001) {
+        targetAspect = (canvasAspect * c - s) / denom;
+      }
+      // Floor at 1.05 so we don't go upright/portrait at extreme rotations.
+      targetAspect = Math.max(1.05, targetAspect);
+      const invAspect = 1 / targetAspect;
+      state.bH = Math.max(20, Math.round(state.bW * invAspect));
+      state.by = +(state.bx * invAspect).toFixed(2);
+      state.gy = +(state.gx * invAspect).toFixed(2);
+      state.bR = randInt(0, Math.floor(Math.min(state.bW, state.bH) * 0.45));
+    }
 
     // Profile — never Uniform; always something with character
     const profiles = ["TAPER_OUT", "TAPER_IN", "ALTERNATE", "TIERED", "HOURGLASS"];
