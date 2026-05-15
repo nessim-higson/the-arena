@@ -276,6 +276,27 @@
   }
   .anchor-btn:hover { border-color: var(--muted); color: var(--fg); }
   .anchor-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  /* fit-mode trio: TIGHT / AUTO / LOOSE */
+  .fit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .fit-btn {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 8px 0;
+    font: 600 9px/1 ui-monospace, monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 80ms, color 80ms, background 80ms;
+  }
+  .fit-btn:hover { border-color: var(--muted); color: var(--fg); }
+  .fit-btn.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   #stage::before {
     content: "";
     position: absolute; inset: 0;
@@ -396,7 +417,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.10</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.11</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -435,6 +456,12 @@
         <button class="pos-btn" data-px="0.2" data-py="0.8" title="Bottom-Left">↙</button>
         <button class="pos-btn" data-px="0.5" data-py="0.8" title="Bottom">↓</button>
         <button class="pos-btn" data-px="0.8" data-py="0.8" title="Bottom-Right">↘</button>
+      </div>
+      <div class="row"><label>Fit</label><span class="val" id="v-fitMode">AUTO</span></div>
+      <div class="fit-grid" id="fitGrid">
+        <button class="fit-btn" data-fit="TIGHT" title="Every ring stays inside the canvas">Tight</button>
+        <button class="fit-btn active" data-fit="AUTO" title="Shrink only if too big; off-center can overflow">Auto</button>
+        <button class="fit-btn" data-fit="LOOSE" title="No clamping — rings fly beyond the canvas">Loose</button>
       </div>
       <div class="row"><label>Echo From</label><span class="val" id="v-anchorMode">●</span></div>
       <div class="pos-grid" id="anchorGrid">
@@ -603,7 +630,8 @@
     bx: 8.6, by: 24.5, dRb: 10.7,
     gx: 76, gy: 22, dRg: 3.8,
     bandProfile: "UNIFORM", bandVar: 0,
-    anchorMode: "CENTER"
+    anchorMode: "CENTER",
+    fitMode: "AUTO"
   };
 
   const DEFAULT_STATE = () => ({
@@ -619,10 +647,13 @@
     bandProfile: "UNIFORM",
     bandVar: 0.5,
     anchorMode: "CENTER",
-    // If true, the mark scales down to fit the canvas at ~94% margin. Set
-    // false (by VIEWPORT BREAK mood) to let rings extend dramatically beyond
-    // the frame.
-    autoFit: true,
+    // Fit mode: how the mark relates to the viewport edges.
+    //   TIGHT  — composition fits entirely inside the canvas (with anchor
+    //            offset and position fully accounted for, no overflow at all)
+    //   AUTO   — shrink only if the outermost ring exceeds canvas size;
+    //            overflow allowed when caused by off-center position
+    //   LOOSE  — never shrink; rings can extend dramatically beyond canvas
+    fitMode: "AUTO",
     motion: {
       // accRot fields accumulate rotation only while weight > 0; phases free-run.
       // This decouples each motion's internal time from the global timeAccum,
@@ -878,9 +909,38 @@
     // Breathe uses free-running phase too — speed changes don't cause phase jumps.
     let markScale = state.scale * (1 + Math.sin(state.motion.breathe.phase) * state.motion.breathe.amount * wBreathe);
 
-    // Auto-fit: shrinks markScale so the outermost ring fits at 94% of the
-    // canvas. Disabled per mood (VIEWPORT BREAK) to let rings break the frame.
-    if (state.autoFit !== false) {
+    // Fit mode: how the composition relates to the canvas.
+    //   TIGHT — Every ring's bounding box must fit inside the canvas. Accounts
+    //           for anchor offset AND canvas position so off-center anchors
+    //           still stay fully contained.
+    //   AUTO  — Shrink only if the outermost ring's SIZE exceeds canvas (ignores
+    //           position-induced overflow). Default.
+    //   LOOSE — No shrinking. Rings extend off canvas freely.
+    const mode = state.fitMode || "AUTO";
+    if (mode === "TIGHT") {
+      const last = rings[rings.length - 1];
+      const rotRad = (markRot * Math.PI) / 180;
+      const c = Math.abs(Math.cos(rotRad));
+      const sn = Math.abs(Math.sin(rotRad));
+      const rotW = last.W * c + last.H * sn;
+      const rotH = last.H * c + last.W * sn;
+      // For each canvas edge, compute the largest markScale that keeps the
+      // ring on the correct side of that edge given the anchor offset + position.
+      // Edge coefficients = anchor offset ± 0.5 (the ring's half-extent).
+      const px = state.px, py = state.py;
+      const cxNow = px * VW;
+      const cyNow = py * VH;
+      const leftCoef   = ahx - 0.5;  // <0 → ring extends left of (cx); constraint
+      const rightCoef  = ahx + 0.5;  // >0 → ring extends right of (cx); constraint
+      const topCoef    = ahy - 0.5;
+      const bottomCoef = ahy + 0.5;
+      let maxScale = Infinity;
+      if (leftCoef   < 0) maxScale = Math.min(maxScale, cxNow / (-leftCoef * rotW));
+      if (rightCoef  > 0) maxScale = Math.min(maxScale, (VW - cxNow) / (rightCoef * rotW));
+      if (topCoef    < 0) maxScale = Math.min(maxScale, cyNow / (-topCoef * rotH));
+      if (bottomCoef > 0) maxScale = Math.min(maxScale, (VH - cyNow) / (bottomCoef * rotH));
+      if (markScale > maxScale * 0.96) markScale = maxScale * 0.96;
+    } else if (mode === "AUTO") {
       const last = rings[rings.length - 1];
       const rotRad = (markRot * Math.PI) / 180;
       const c = Math.abs(Math.cos(rotRad));
@@ -892,6 +952,7 @@
       const fit = Math.min(1, (VW * 0.94) / reqW, (VH * 0.94) / reqH);
       markScale *= fit;
     }
+    // mode === "LOOSE" → no shrinking, rings can fly off the canvas
 
     const morphPhase = state.motion.morph.phase;
     const morphRadius = 1 + Math.sin(morphPhase) * state.motion.morph.amount * wMorph;
@@ -1329,6 +1390,7 @@
     document.querySelectorAll(".swatches[data-target='fg'] .swatch-pick").forEach(s => s.classList.toggle("active", s.dataset.c === state.color));
     if (typeof syncPosGrid === "function") syncPosGrid();
     if (typeof syncAnchorGrid === "function") syncAnchorGrid();
+    if (typeof syncFitGrid === "function") syncFitGrid();
   }
 
   // ─── export
@@ -1362,7 +1424,7 @@
         N: state.N, px: state.px, py: state.py, rot: state.rot, scale: state.scale, curve: state.curve,
         bW: state.bW, bH: state.bH, bR: state.bR, bx: state.bx, by: state.by, gx: state.gx, gy: state.gy,
         bp: state.bandProfile, bv: state.bandVar,
-        am: state.anchorMode,
+        am: state.anchorMode, fm: state.fitMode,
         bg: state.bg, fg: state.color,
         m: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [k, [v.on?1:0, v.speed, v.amount]]))
       };
@@ -1379,6 +1441,7 @@
       if (obj.bp) state.bandProfile = obj.bp;
       if (typeof obj.bv === "number") state.bandVar = obj.bv;
       if (obj.am) state.anchorMode = obj.am;
+      if (obj.fm) state.fitMode = obj.fm;
       if (obj.bg) state.bg = obj.bg;
       if (obj.fg) state.color = obj.fg;
       if (obj.m) {
@@ -1447,6 +1510,21 @@
       state.py = parseFloat(b.dataset.py);
       syncAllSliders();
       syncPosGrid();
+      render();
+    });
+  });
+
+  // ─── fit-mode trio (TIGHT / AUTO / LOOSE)
+  function syncFitGrid() {
+    document.querySelectorAll(".fit-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.fit === (state.fitMode || "AUTO"));
+    });
+    $("v-fitMode").textContent = state.fitMode || "AUTO";
+  }
+  document.querySelectorAll(".fit-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      state.fitMode = b.dataset.fit;
+      syncFitGrid();
       render();
     });
   });
@@ -1520,8 +1598,10 @@
     state.scale = CANONICAL_BRAND.scale;
     state.curve = CANONICAL_BRAND.curve;
     state.anchorMode = CANONICAL_BRAND.anchorMode;
+    state.fitMode = CANONICAL_BRAND.fitMode;
     syncAllSliders();
     syncAnchorGrid();
+    syncFitGrid();
     render();
   }
   function resetAnchor() {
@@ -1698,6 +1778,17 @@
       motions: ["TILT", "MORPH PULSE", "BREATH"]
     },
     {
+      name: "TIGHT CONTAIN",  // ★ NEW: every ring guaranteed inside the canvas
+      weight: 0.07,
+      N: [8, 24],
+      bx: [4, 10], by: [10, 24], gx: [30, 70], gy: [14, 32],
+      scale: [2.0, 4.5],       // can target big, TIGHT clamps to fit
+      anchorAspect: "any",
+      positions: "center-heavy",
+      fitMode: "TIGHT",
+      motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
+    },
+    {
       name: "EXPLOSION",
       weight: 0.06,
       N: [35, 60],
@@ -1803,8 +1894,9 @@
       state.py = pos[1];
       state.anchorMode = "CENTER";
     }
-    // Auto-fit toggle (some moods disable it for intentional frame-break)
-    state.autoFit = mood.autoFit !== false;
+    // Fit mode per mood: defaults to AUTO; overflow moods set LOOSE; new
+    // TIGHT-contained mood sets TIGHT.
+    state.fitMode = mood.fitMode || (mood.autoFit === false ? "LOOSE" : "AUTO");
 
     // Anchor — shape category × the mood's band/gap ranges
     const shape = pickAnchorShape(mood.anchorAspect);
