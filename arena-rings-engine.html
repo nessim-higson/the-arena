@@ -540,7 +540,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.16</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.17</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -581,15 +581,15 @@
           <div class="anchor-pad-dot" id="anchorDot"></div>
         </div>
         <div class="pos-grid" id="anchorGrid">
-          <button class="anchor-btn" data-ahx="0.5" data-ahy="0.5" title="Anchor at top-left of ring">↖</button>
-          <button class="anchor-btn" data-ahx="0" data-ahy="0.5" title="Anchor at top edge">↑</button>
-          <button class="anchor-btn" data-ahx="-0.5" data-ahy="0.5" title="Anchor at top-right">↗</button>
-          <button class="anchor-btn" data-ahx="0.5" data-ahy="0" title="Anchor at left edge">←</button>
+          <button class="anchor-btn" data-ahx="0.35" data-ahy="0.35" title="Anchor toward top-left of ring">↖</button>
+          <button class="anchor-btn" data-ahx="0" data-ahy="0.35" title="Anchor toward top edge">↑</button>
+          <button class="anchor-btn" data-ahx="-0.35" data-ahy="0.35" title="Anchor toward top-right">↗</button>
+          <button class="anchor-btn" data-ahx="0.35" data-ahy="0" title="Anchor toward left edge">←</button>
           <button class="anchor-btn active" data-ahx="0" data-ahy="0" title="Anchor at center (concentric)">●</button>
-          <button class="anchor-btn" data-ahx="-0.5" data-ahy="0" title="Anchor at right edge">→</button>
-          <button class="anchor-btn" data-ahx="0.5" data-ahy="-0.5" title="Anchor at bottom-left">↙</button>
-          <button class="anchor-btn" data-ahx="0" data-ahy="-0.5" title="Anchor at bottom edge">↓</button>
-          <button class="anchor-btn" data-ahx="-0.5" data-ahy="-0.5" title="Anchor at bottom-right">↘</button>
+          <button class="anchor-btn" data-ahx="-0.35" data-ahy="0" title="Anchor toward right edge">→</button>
+          <button class="anchor-btn" data-ahx="0.35" data-ahy="-0.35" title="Anchor toward bottom-left">↙</button>
+          <button class="anchor-btn" data-ahx="0" data-ahy="-0.35" title="Anchor toward bottom edge">↓</button>
+          <button class="anchor-btn" data-ahx="-0.35" data-ahy="-0.35" title="Anchor toward bottom-right">↘</button>
         </div>
       </div>
       <div class="row"><label>Ring Count</label><span class="val" id="v-N">22</span><input id="N" type="range" min="1" max="60" step="1" value="22"></div>
@@ -731,9 +731,10 @@
     <div class="screensaver-banner" id="ssBanner">Screensaver · <span id="ssBannerName">—</span></div>
     <div class="stage-meta">
       <b id="meta-N">22</b> RINGS<br>
+      ECHO <b id="meta-echo">CENTER</b><br>
       <b id="meta-time">0.0s</b><br>
       <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v1.0</span>
+      <span style="opacity:0.45">BUILD v1.17</span>
     </div>
     <div class="stage-controls">
       <button class="btn" id="playPause">▶ Play Motion</button>
@@ -1094,7 +1095,7 @@
       if (rightCoef  > 0) maxScale = Math.min(maxScale, (VW - cxNow) / (rightCoef * rotW));
       if (topCoef    < 0) maxScale = Math.min(maxScale, cyNow / (-topCoef * rotH));
       if (bottomCoef > 0) maxScale = Math.min(maxScale, (VH - cyNow) / (bottomCoef * rotH));
-      if (markScale > maxScale * 0.96) markScale = maxScale * 0.96;
+      if (markScale > maxScale * 0.98) markScale = maxScale * 0.98;
     } else if (mode === "AUTO") {
       const last = rings[rings.length - 1];
       const rotRad = (markRot * Math.PI) / 180;
@@ -1179,6 +1180,7 @@
     $("meta-N").textContent = state.N;
     $("meta-time").textContent = state.timeAccum.toFixed(1) + "s";
     $("meta-state").textContent = state.playing ? (state.screensaver ? "AUTO" : "MOTION") : "STATIC";
+    if ($("meta-echo")) $("meta-echo").textContent = describeAnchor(state.ahx, state.ahy);
     $("ssBanner").classList.toggle("on", state.screensaver);
     $("ssBannerName").textContent = SS_STATES[state.ssStateIdx].name;
 
@@ -2026,27 +2028,31 @@
       motions: ["TILT", "BREATH", "MORPH PULSE", "CASCADE"]
     },
     {
-      name: "CENTERED",       // ★ exposed as top-level button. Calm upright
-      weight: 0.05,            //   composition: no rotation, TIGHT fit, calm scale.
+      name: "CENTERED",
+      weight: 0.05,
       N: [10, 20],
       bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
-      scale: [2.4, 3.8],
+      scale: [6, 10],
       anchorAspect: "any",
       positions: "center-heavy",
       fitMode: "TIGHT",
       lockRotation: true,
+      anchorCentered: true,    // force ahx=ahy=0 (no drift) — fills the frame
+      anchorCenterPosition: true, // also pin px=py=0.5 so TIGHT can fill edges
       motions: ["BREATH", "MORPH PULSE"]
     },
     {
-      name: "ROTATED",        // ★ exposed as top-level button. Tilted but TIGHT.
+      name: "ROTATED",
       weight: 0.05,
       N: [10, 20],
       bx: [4, 10], by: [12, 26], gx: [34, 70], gy: [14, 28],
-      scale: [2.2, 3.6],
+      scale: [6, 10],
       anchorAspect: "any",
       positions: "center-heavy",
       fitMode: "TIGHT",
-      rotRange: [18, 38],      // pick a notable angle in this range (sign random)
+      rotRange: [18, 38],
+      anchorCentered: true,
+      anchorCenterPosition: true,
       motions: ["TILT", "BREATH", "MORPH PULSE"]
     },
     {
@@ -2165,24 +2171,25 @@
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
     if (mood.layout === "corner-emergence") {
-      // Continuous anchor with jitter — never the same exact spot twice.
+      // Anchor pulled in from the ring's edge (0.35 not 0.5) so it's not "hard"
+      // against the boundary. Jitter still produces continuous variety.
       const corners = [
-        { px: 0.36, py: 0.36, ahx:  0.5, ahy:  0.5 },  // top-left
-        { px: 0.64, py: 0.36, ahx: -0.5, ahy:  0.5 },  // top-right
-        { px: 0.36, py: 0.64, ahx:  0.5, ahy: -0.5 },  // bottom-left
-        { px: 0.64, py: 0.64, ahx: -0.5, ahy: -0.5 }   // bottom-right
+        { px: 0.36, py: 0.36, ahx:  0.35, ahy:  0.35 },
+        { px: 0.64, py: 0.36, ahx: -0.35, ahy:  0.35 },
+        { px: 0.36, py: 0.64, ahx:  0.35, ahy: -0.35 },
+        { px: 0.64, py: 0.64, ahx: -0.35, ahy: -0.35 }
       ];
       const c = corners[Math.floor(Math.random() * 4)];
       state.px = jitter(c.px, 0.16);
       state.py = jitter(c.py, 0.16);
-      state.ahx = Math.max(-0.5, Math.min(0.5, jitter(c.ahx, 0.18)));
-      state.ahy = Math.max(-0.5, Math.min(0.5, jitter(c.ahy, 0.18)));
+      state.ahx = Math.max(-0.5, Math.min(0.5, jitter(c.ahx, 0.20)));
+      state.ahy = Math.max(-0.5, Math.min(0.5, jitter(c.ahy, 0.20)));
     } else if (mood.layout === "edge-emergence") {
       const edges = [
-        { px: 0.5,  py: 0.68, ahx:  0,   ahy: -0.5 },
-        { px: 0.5,  py: 0.32, ahx:  0,   ahy:  0.5 },
-        { px: 0.68, py: 0.5,  ahx: -0.5, ahy:  0 },
-        { px: 0.32, py: 0.5,  ahx:  0.5, ahy:  0 }
+        { px: 0.5,  py: 0.68, ahx:  0,    ahy: -0.35 },
+        { px: 0.5,  py: 0.32, ahx:  0,    ahy:  0.35 },
+        { px: 0.68, py: 0.5,  ahx: -0.35, ahy:  0 },
+        { px: 0.32, py: 0.5,  ahx:  0.35, ahy:  0 }
       ];
       const e = edges[Math.floor(Math.random() * 4)];
       state.px = jitter(e.px, 0.12);
@@ -2190,13 +2197,21 @@
       state.ahx = Math.max(-0.5, Math.min(0.5, jitter(e.ahx, 0.18)));
       state.ahy = Math.max(-0.5, Math.min(0.5, jitter(e.ahy, 0.18)));
     } else {
-      const pos = pickPosition(mood.positions);
-      state.px = pos[0];
-      state.py = pos[1];
-      // For center-style moods, mostly center anchor but occasionally subtle drift
-      if (Math.random() < 0.18) {
-        state.ahx = jitter(0, 0.30);
-        state.ahy = jitter(0, 0.30);
+      if (mood.anchorCenterPosition) {
+        state.px = 0.5;
+        state.py = 0.5;
+      } else {
+        const pos = pickPosition(mood.positions);
+        state.px = pos[0];
+        state.py = pos[1];
+      }
+      if (mood.anchorCentered) {
+        // Force true center anchor — no drift — so TIGHT can fill the frame.
+        state.ahx = 0;
+        state.ahy = 0;
+      } else if (Math.random() < 0.40) {
+        state.ahx = jitter(0, 0.50);  // ±0.25 around 0 — gentle drift
+        state.ahy = jitter(0, 0.50);
       } else {
         state.ahx = 0;
         state.ahy = 0;
@@ -2231,6 +2246,12 @@
     if (map[mode]) $(map[mode]).classList.add("mode-active");
   }
 
+  function expandStackSection() {
+    const stackLegend = [...document.querySelectorAll("fieldset.collapsible > legend")]
+      .find(l => l.textContent.trim().startsWith("Stack"));
+    if (stackLegend) stackLegend.parentElement.classList.remove("collapsed");
+  }
+
   function applyMoodFully(forceMoodName) {
     if (forceMoodName) state.lockRotation = false;
     const mood = randomizeAll(forceMoodName);
@@ -2241,6 +2262,7 @@
     applySSStateInstant(idx >= 0 ? idx : 0);
     if (!state.playing) togglePlay();
     syncLockRot();
+    expandStackSection();
     render();
     toast(mood.name);
     return mood;
