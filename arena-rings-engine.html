@@ -417,7 +417,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.12</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.13</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -539,6 +539,13 @@
         <button class="btn" id="ssToggle">Auto Cycle</button>
         <button class="btn" id="motionsOff">Stop All</button>
       </div>
+    </fieldset>
+
+    <fieldset class="collapsible collapsed">
+      <legend>Moods
+        <span class="actions"><button class="btn tiny" id="randomMood">Surprise</button></span>
+      </legend>
+      <div class="preset-grid" id="moodGrid"></div>
     </fieldset>
 
     <fieldset class="collapsible collapsed">
@@ -1899,8 +1906,13 @@
     return opts[Math.floor(Math.random() * opts.length)];
   }
 
-  function randomizeAll() {
-    const mood = pickWeighted(COMP_MOODS);
+  // Pick a specific mood by name (used by mood-grid buttons), or random if not given
+  function findMood(name) {
+    return COMP_MOODS.find(m => m.name === name) || COMP_MOODS[0];
+  }
+
+  function randomizeAll(forceMoodName) {
+    const mood = forceMoodName ? findMood(forceMoodName) : pickWeighted(COMP_MOODS);
     state.lastMood = mood.name;
 
     // Stack
@@ -1961,18 +1973,41 @@
     return mood;
   }
 
-  $("randomizeAll").addEventListener("click", () => {
-    const mood = randomizeAll();
+  function applyMoodFully(forceMoodName) {
+    // Toggling Lock Rotation off so mood-specified lock can apply cleanly.
+    if (!forceMoodName) {
+      // random: respect whatever lockRotation was unless mood overrides it
+    } else {
+      // explicit mood click — clear lockRotation so mood's own setting wins
+      state.lockRotation = false;
+    }
+    const mood = randomizeAll(forceMoodName);
     syncAllSliders();
     syncBandProfileUI();
-    // Motion — pick from the mood's curated list so the animation matches the composition.
     const motionName = mood.motions[Math.floor(Math.random() * mood.motions.length)];
     const idx = SS_STATES.findIndex(s => s.name === motionName);
     applySSStateInstant(idx >= 0 ? idx : 0);
     if (!state.playing) togglePlay();
+    syncLockRot();
     render();
     toast(mood.name);
-  });
+    return mood;
+  }
+  $("randomizeAll").addEventListener("click", () => applyMoodFully());
+
+  // ─── Mood grid (every named mood as a clickable preset)
+  function buildMoodGrid() {
+    const grid = $("moodGrid");
+    grid.innerHTML = "";
+    for (const mood of COMP_MOODS) {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.textContent = mood.name;
+      b.addEventListener("click", () => applyMoodFully(mood.name));
+      grid.appendChild(b);
+    }
+  }
+  $("randomMood").addEventListener("click", () => applyMoodFully());
 
   // ─── full Canonical reset (back to the 4-ring RINGS.svg mark)
   $("goCanonical").addEventListener("click", () => {
@@ -1998,6 +2033,7 @@
   syncBandProfileUI();
   buildMotionRows();
   buildSSStateGrid();
+  buildMoodGrid();
   syncAllSliders();
   // Fresh load: pick a composition mood + matching motion. Variation is the
   // tool's resting state; Canonical is the revert. Shared URLs (#e=) load
