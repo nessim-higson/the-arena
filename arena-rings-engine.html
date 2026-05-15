@@ -189,7 +189,63 @@
     border-color: var(--fg);
     box-shadow: inset 0 0 0 2px rgba(0,0,0,0.4);
   }
-  /* motion row: toggle button + speed slider + optional 2nd param */
+  /* collapsible motion row: header + body (sliders hidden when collapsed) */
+  .motion-row2 {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.012);
+  }
+  .motion-row2.on { border-color: rgba(255,58,31,0.5); }
+  .motion-head {
+    display: grid;
+    grid-template-columns: 1fr 34px;
+    align-items: stretch;
+  }
+  .motion-expand {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 0;
+    padding: 9px 10px;
+    font: 600 9px/1 ui-monospace, monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+  }
+  .motion-row2:not(.collapsed) .motion-expand { background: rgba(255,255,255,0.04); color: var(--fg); }
+  .motion-row2.on .motion-expand { color: var(--fg); }
+  .motion-on {
+    appearance: none;
+    background: transparent;
+    color: var(--muted);
+    border: 0;
+    border-left: 1px solid var(--line);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .motion-row2.on .motion-on { color: var(--accent); }
+  .motion-body { padding: 6px 10px 9px; border-top: 1px solid var(--line); }
+  .motion-row2.collapsed .motion-body { display: none; }
+  .motion-slider-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }
+  .motion-slider-row label {
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .motion-subhead {
+    color: var(--muted);
+    font: 600 9px/1 ui-monospace, monospace;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 4px 0 8px;
+    border-top: 1px solid transparent;
+  }
+  /* legacy (no longer used but kept in case of refactor) */
   .motion-row {
     display: grid;
     grid-template-columns: 76px 1fr 1fr;
@@ -251,6 +307,13 @@
   .header-btn:active { background: var(--fg); color: var(--bg); }
   .header-btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   .header-btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--fg); }
+  /* mode-active: the button corresponding to the currently-applied preset */
+  .header-btn.mode-active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  .header-btn.primary.mode-active { background: var(--accent); color: var(--bg); }
   /* 3x3 position grid: quick anchor placement on canvas */
   .pos-grid {
     display: grid;
@@ -424,7 +487,7 @@
 <main>
   <aside>
     <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.14</span> · <span id="buildDate">15 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.15</span> · <span id="buildDate">15 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -531,29 +594,29 @@
       <div class="row" style="margin-top:10px"><label>Variation</label><span class="val" id="v-bandVar">0.50</span><input id="bandVar" type="range" min="0" max="1" step="0.01" value="0.5"></div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="collapsible collapsed">
       <legend>Motion
         <span class="actions">
-          <button class="btn tiny" id="allOn">All</button>
-          <button class="btn tiny" id="allOff">None</button>
+          <button class="btn tiny" id="ssRandom">Surprise</button>
         </span>
       </legend>
-      <div id="motionRows"></div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Motion Presets
-        <span class="actions"><button class="btn tiny" id="ssRandom">Random</button></span>
-      </legend>
+      <div class="motion-subhead">Quick Combos</div>
       <div class="preset-grid" id="ssStateGrid"></div>
-      <div class="btnrow" style="margin-top:8px">
+      <div class="btnrow" style="margin-top:6px">
         <button class="btn" id="ssToggle">Auto Cycle</button>
         <button class="btn" id="motionsOff">Stop All</button>
       </div>
+      <div class="motion-subhead" style="margin-top:14px">Individual Controls
+        <span class="actions" style="float:right">
+          <button class="btn tiny" id="allOn">All</button>
+          <button class="btn tiny" id="allOff">None</button>
+        </span>
+      </div>
+      <div id="motionRows"></div>
     </fieldset>
 
     <fieldset class="collapsible collapsed">
-      <legend>Moods
+      <legend>Compositions
         <span class="actions"><button class="btn tiny" id="randomMood">Surprise</button></span>
       </legend>
       <div class="preset-grid" id="moodGrid"></div>
@@ -582,20 +645,6 @@
       <div class="btnrow" style="margin-top:10px">
         <button class="btn" id="t-grid">Grid</button>
         <button class="btn" id="t-invert">Invert</button>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Presets</legend>
-      <div class="preset-grid">
-        <button class="btn" data-preset="diagonal-pyramid">Diagonal Stack</button>
-        <button class="btn" data-preset="off-center-stack">Off-Center</button>
-        <button class="btn" data-preset="dense-frame">Dense Frame</button>
-        <button class="btn" data-preset="thick-frame">Thick Frame</button>
-        <button class="btn" data-preset="thin-many">Thin · Many</button>
-        <button class="btn" data-preset="portrait-tall">Tall Portrait</button>
-        <button class="btn" data-preset="wide-horizon">Wide Horizon</button>
-        <button class="btn" data-preset="square">Square Stack</button>
       </div>
     </fieldset>
 
@@ -792,23 +841,41 @@
     for (const m of MOTIONS) {
       const motionState = state.motion[m.key];
       const row = document.createElement("div");
-      row.className = "motion-row" + (motionState.on ? " on" : "");
+      row.className = "motion-row2 collapsed" + (motionState.on ? " on" : "");
       row.dataset.key = m.key;
-      const amountCell = m.hasAmount
-        ? `<input class="mslider" type="range" min="${m.amountRange[0]}" max="${m.amountRange[1]}" step="${m.amountRange[2]}" value="${motionState.amount}" data-param="amount" title="${m.amountLabel}">`
-        : `<div></div>`;
+      const amountHTML = m.hasAmount
+        ? `<div class="motion-slider-row">
+            <label>${m.amountLabel}</label>
+            <input class="mslider" type="range" min="${m.amountRange[0]}" max="${m.amountRange[1]}" step="${m.amountRange[2]}" value="${motionState.amount}" data-param="amount">
+          </div>`
+        : '';
       row.innerHTML = `
-        <button class="btn toggle" data-param="toggle">${m.label}</button>
-        <input class="mslider" type="range" min="0" max="2" step="0.01" value="${motionState.speed}" data-param="speed" title="Speed">
-        ${amountCell}
+        <div class="motion-head">
+          <button class="motion-expand" data-param="expand">▸ ${m.label}</button>
+          <button class="motion-on" data-param="toggle" title="${m.label} on/off">${motionState.on ? '●' : '○'}</button>
+        </div>
+        <div class="motion-body">
+          <div class="motion-slider-row">
+            <label>Speed</label>
+            <input class="mslider" type="range" min="0" max="2" step="0.01" value="${motionState.speed}" data-param="speed">
+          </div>
+          ${amountHTML}
+        </div>
       `;
-      row.querySelector('[data-param="toggle"]').addEventListener("click", () => {
+      row.querySelector('[data-param="expand"]').addEventListener("click", () => {
+        row.classList.toggle("collapsed");
+        const exp = row.querySelector('[data-param="expand"]');
+        exp.textContent = (row.classList.contains("collapsed") ? "▸ " : "▾ ") + m.label;
+      });
+      row.querySelector('[data-param="toggle"]').addEventListener("click", e => {
+        e.stopPropagation();
         motionState.on = !motionState.on;
         row.classList.toggle("on", motionState.on);
+        row.querySelector('[data-param="toggle"]').textContent = motionState.on ? '●' : '○';
         if (motionState.on && !state.playing) togglePlay();
       });
       const speed = row.querySelector('[data-param="speed"]');
-      speed.addEventListener("input", () => motionState.speed = parseFloat(speed.value));
+      if (speed) speed.addEventListener("input", () => motionState.speed = parseFloat(speed.value));
       const amt = row.querySelector('[data-param="amount"]');
       if (amt) amt.addEventListener("input", () => motionState.amount = parseFloat(amt.value));
       container.appendChild(row);
@@ -1903,30 +1970,47 @@
     return all[Math.floor(Math.random() * all.length)];
   }
 
+  // Slight jitter around a base position so the same spec produces varied
+  // outputs across randomizes — less rigid grid feel.
+  function jitter(base, amount) {
+    return base + (Math.random() - 0.5) * amount;
+  }
   function pickPosition(spec) {
     if (spec === "center-heavy") {
-      return Math.random() < 0.75 ? [0.5, 0.5] : [
-        [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75]
-      ][Math.floor(Math.random() * 4)];
+      // Most are "near-center" with small natural offset; rest are gently off-center
+      if (Math.random() < 0.6) {
+        return [jitter(0.5, 0.14), jitter(0.5, 0.14)];
+      }
+      const opts = [
+        [0.36, 0.5], [0.64, 0.5], [0.5, 0.36], [0.5, 0.64],
+        [0.38, 0.38], [0.62, 0.38], [0.38, 0.62], [0.62, 0.62]
+      ];
+      const p = opts[Math.floor(Math.random() * opts.length)];
+      return [jitter(p[0], 0.06), jitter(p[1], 0.06)];
     }
     if (spec === "corners") {
-      return [[0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]][Math.floor(Math.random() * 4)];
+      const opts = [
+        [0.32, 0.32], [0.68, 0.32], [0.32, 0.68], [0.68, 0.68]
+      ];
+      const p = opts[Math.floor(Math.random() * opts.length)];
+      return [jitter(p[0], 0.08), jitter(p[1], 0.08)];
     }
     if (spec === "extreme-corners") {
-      // Pulled in from the canvas edge so there's breathing space around the
-      // anchor (0.22-0.78 instead of right against the frame).
-      return [
-        [0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78],
-        [0.28, 0.30], [0.72, 0.30], [0.28, 0.70], [0.72, 0.70]
-      ][Math.floor(Math.random() * 8)];
+      // Softer than v1.x — anchor lives near a corner but with breathing room
+      const opts = [
+        [0.30, 0.30], [0.70, 0.30], [0.30, 0.70], [0.70, 0.70]
+      ];
+      const p = opts[Math.floor(Math.random() * opts.length)];
+      return [jitter(p[0], 0.10), jitter(p[1], 0.10)];
     }
     // "any"
     const opts = [
       [0.5, 0.5], [0.5, 0.5],
-      [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75],
-      [0.22, 0.22], [0.78, 0.22], [0.22, 0.78], [0.78, 0.78]
+      [0.35, 0.5], [0.65, 0.5], [0.5, 0.35], [0.5, 0.65],
+      [0.32, 0.32], [0.68, 0.32], [0.32, 0.68], [0.68, 0.68]
     ];
-    return opts[Math.floor(Math.random() * opts.length)];
+    const p = opts[Math.floor(Math.random() * opts.length)];
+    return [jitter(p[0], 0.07), jitter(p[1], 0.07)];
   }
 
   // Pick a specific mood by name (used by mood-grid buttons), or random if not given
@@ -1959,25 +2043,29 @@
 
     // Position + anchorMode (coupled for "echo from corner/edge" layouts)
     if (mood.layout === "corner-emergence") {
-      // Positions pulled in from canvas edge so there's breathing space —
-      // anchor sits around 28/72%, not flush at the corner.
+      // Even softer — anchor lives around 36/64 with ±0.08 jitter so each
+      // randomize lands at a slightly different spot.
       const corners = [
-        { p: [0.28, 0.28], a: "TOP-LEFT" },
-        { p: [0.72, 0.28], a: "TOP-RIGHT" },
-        { p: [0.28, 0.72], a: "BOTTOM-LEFT" },
-        { p: [0.72, 0.72], a: "BOTTOM-RIGHT" }
+        { p: [0.36, 0.36], a: "TOP-LEFT" },
+        { p: [0.64, 0.36], a: "TOP-RIGHT" },
+        { p: [0.36, 0.64], a: "BOTTOM-LEFT" },
+        { p: [0.64, 0.64], a: "BOTTOM-RIGHT" }
       ];
       const c = corners[Math.floor(Math.random() * 4)];
-      state.px = c.p[0]; state.py = c.p[1]; state.anchorMode = c.a;
+      state.px = jitter(c.p[0], 0.16);
+      state.py = jitter(c.p[1], 0.16);
+      state.anchorMode = c.a;
     } else if (mood.layout === "edge-emergence") {
       const edges = [
-        { p: [0.5,  0.74], a: "BOTTOM-CENTER" },
-        { p: [0.5,  0.26], a: "TOP-CENTER" },
-        { p: [0.74, 0.5 ], a: "MIDDLE-RIGHT" },
-        { p: [0.26, 0.5 ], a: "MIDDLE-LEFT" }
+        { p: [0.5,  0.68], a: "BOTTOM-CENTER" },
+        { p: [0.5,  0.32], a: "TOP-CENTER" },
+        { p: [0.68, 0.5 ], a: "MIDDLE-RIGHT" },
+        { p: [0.32, 0.5 ], a: "MIDDLE-LEFT" }
       ];
       const e = edges[Math.floor(Math.random() * 4)];
-      state.px = e.p[0]; state.py = e.p[1]; state.anchorMode = e.a;
+      state.px = jitter(e.p[0], 0.12);
+      state.py = jitter(e.p[1], 0.12);
+      state.anchorMode = e.a;
     } else {
       const pos = pickPosition(mood.positions);
       state.px = pos[0];
@@ -2006,14 +2094,15 @@
     return mood;
   }
 
+  function setCurrentMode(mode) {
+    state.currentMode = mode;
+    document.querySelectorAll(".header-btn").forEach(b => b.classList.remove("mode-active"));
+    const map = { CANONICAL: "goCanonical", CENTERED: "modeCentered", ROTATED: "modeRotated" };
+    if (map[mode]) $(map[mode]).classList.add("mode-active");
+  }
+
   function applyMoodFully(forceMoodName) {
-    // Toggling Lock Rotation off so mood-specified lock can apply cleanly.
-    if (!forceMoodName) {
-      // random: respect whatever lockRotation was unless mood overrides it
-    } else {
-      // explicit mood click — clear lockRotation so mood's own setting wins
-      state.lockRotation = false;
-    }
+    if (forceMoodName) state.lockRotation = false;
     const mood = randomizeAll(forceMoodName);
     syncAllSliders();
     syncBandProfileUI();
@@ -2026,10 +2115,9 @@
     toast(mood.name);
     return mood;
   }
-  $("randomizeAll").addEventListener("click", () => applyMoodFully());
-  // Exposed mode buttons — direct shortcuts to the two "calm and contained" looks.
-  $("modeCentered").addEventListener("click", () => applyMoodFully("CENTERED"));
-  $("modeRotated").addEventListener("click", () => applyMoodFully("ROTATED"));
+  $("randomizeAll").addEventListener("click", () => { setCurrentMode(null); applyMoodFully(); });
+  $("modeCentered").addEventListener("click", () => { setCurrentMode("CENTERED"); applyMoodFully("CENTERED"); });
+  $("modeRotated").addEventListener("click", () => { setCurrentMode("ROTATED"); applyMoodFully("ROTATED"); });
 
   // ─── Mood grid (every named mood as a clickable preset)
   function buildMoodGrid() {
@@ -2047,6 +2135,7 @@
 
   // ─── full Canonical reset (back to the 4-ring RINGS.svg mark)
   $("goCanonical").addEventListener("click", () => {
+    setCurrentMode("CANONICAL");
     // turn off all motion
     for (const k in state.motion) state.motion[k].on = false;
     state.screensaver = false;
