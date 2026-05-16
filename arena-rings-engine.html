@@ -44,6 +44,14 @@
     text-transform: uppercase;
     margin-bottom: 4px;
   }
+  .brand-logo {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 32px;
+    object-fit: contain;
+    margin: 0 0 10px;
+  }
   .sub {
     color: var(--muted);
     font-size: 10px;
@@ -307,11 +315,23 @@
   .header-btn:active { background: var(--fg); color: var(--bg); }
   .header-btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   .header-btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--fg); }
-  /* mode-active: the button corresponding to the currently-applied preset */
+  /* mode-active: the button corresponding to the currently-applied preset.
+     Strong, unambiguous state — accent fill, ring outline, "● ACTIVE" pip. */
   .header-btn.mode-active {
     background: var(--accent);
     color: var(--bg);
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--accent);
+    position: relative;
+  }
+  .header-btn.mode-active::after {
+    content: "● ACTIVE";
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 7px;
+    letter-spacing: 0.12em;
+    opacity: 0.85;
   }
   .header-btn.primary.mode-active { background: var(--accent); color: var(--bg); }
   /* 3x3 position grid: quick anchor placement on canvas */
@@ -539,8 +559,8 @@
 <body>
 <main>
   <aside>
-    <div class="brand">ARENA</div>
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.18</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <img class="brand-logo" src="arena-logo.png" alt="ARENA">
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.19</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -713,11 +733,15 @@
     <fieldset class="collapsible collapsed">
       <legend>Export</legend>
       <div class="btnrow">
-        <button class="btn" id="copySVG">Copy SVG</button>
-        <button class="btn primary" id="downloadSVG">Download</button>
+        <button class="btn" id="downloadPNG">Download PNG</button>
+        <button class="btn primary" id="downloadSVG">Download SVG</button>
       </div>
       <div class="btnrow" style="margin-top:6px">
+        <button class="btn" id="copySVG">Copy SVG</button>
         <button class="btn" id="copyURL">Copy URL</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px">
+        <button class="btn" id="copyConfig" title="Copy the full state as JSON — paste in chat to share what's working or not">Copy Config</button>
         <button class="btn" id="resetBtn">Reset</button>
       </div>
     </fieldset>
@@ -1569,7 +1593,66 @@
     a.download = `arena-engine-${state.N}r-${Date.now()}.svg`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 500);
-    toast("DOWNLOADED");
+    toast("SVG DOWNLOADED");
+  });
+
+  // PNG export: rasterize the SVG at full format resolution.
+  $("downloadPNG").addEventListener("click", () => {
+    const svgStr = serializeSVG();
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = VW;
+      canvas.height = VH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, VW, VH);
+      canvas.toBlob((png) => {
+        const purl = URL.createObjectURL(png);
+        const a = document.createElement("a");
+        a.href = purl;
+        a.download = `arena-engine-${state.N}r-${Date.now()}.png`;
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(purl); URL.revokeObjectURL(url); }, 500);
+        toast("PNG DOWNLOADED");
+      }, "image/png");
+    };
+    img.onerror = () => { toast("PNG EXPORT FAILED"); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+
+  // Config capture: copy the full state as readable JSON so the user can paste
+  // it into chat with notes ("this composition feels wrong because…").
+  $("copyConfig").addEventListener("click", async () => {
+    const cfg = {
+      version: $("buildVersion").textContent,
+      lastMood: state.lastMood || null,
+      currentMode: state.currentMode || null,
+      format: { W: state.fW, H: state.fH },
+      stack: {
+        N: state.N, scale: +state.scale.toFixed(3), rot: +state.rot.toFixed(2),
+        curve: +state.curve.toFixed(3),
+        px: +state.px.toFixed(3), py: +state.py.toFixed(3),
+        ahx: +state.ahx.toFixed(3), ahy: +state.ahy.toFixed(3),
+      },
+      anchor: {
+        bW: state.bW, bH: state.bH, bR: state.bR,
+        bx: +state.bx.toFixed(2), by: +state.by.toFixed(2),
+        gx: +state.gx.toFixed(2), gy: +state.gy.toFixed(2),
+        dRb: +state.dRb.toFixed(2), dRg: +state.dRg.toFixed(2),
+      },
+      bandProfile: { profile: state.bandProfile, variance: +state.bandVar.toFixed(2) },
+      view: { fitMode: state.fitMode, lockRotation: !!state.lockRotation,
+              fg: state.color, bg: state.bg, invert: !!state.view.invert },
+      motion: Object.fromEntries(Object.entries(state.motion).map(([k, v]) => [
+        k, { on: !!v.on, speed: +(+v.speed).toFixed(3), amount: +(+v.amount).toFixed(3) }
+      ])),
+      shareURL: location.href,
+    };
+    const json = JSON.stringify(cfg, null, 2);
+    try { await navigator.clipboard.writeText(json); toast("CONFIG COPIED"); }
+    catch (e) { toast("COPY FAILED"); console.log(json); }
   });
 
   // ─── URL state
