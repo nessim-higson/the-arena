@@ -593,42 +593,63 @@
   }
   .format-btn.active .prof-icon { color: var(--bg); }
   .prof-icon path { fill: currentColor; }
+  /* HUD card: discreet by default (just shows the mood pill). Click the
+     chevron to expand and reveal the full state breakdown. */
   .stage-meta {
     position: absolute;
-    top: 18px;
-    right: 22px;
+    top: 14px;
+    right: 16px;
+    z-index: 3;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--line);
     color: var(--muted);
     font-size: 10px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    z-index: 2;
-    text-align: right;
-    line-height: 1.6;
-    pointer-events: none;
-  }
-  .stage-meta b { color: var(--fg); font-weight: 600; }
-  /* HUD card: shows mood, key params, motion state. Higher contrast + readable size. */
-  .stage-meta {
-    background: rgba(0,0,0,0.55);
-    border: 1px solid var(--line);
-    padding: 10px 14px;
     line-height: 1.55;
-    font-size: 11px;
-    letter-spacing: 0.12em;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    min-width: 180px;
+    overflow: hidden;
+    transition: opacity 180ms;
+    opacity: 0.7;
   }
-  .stage-meta .hud-title {
+  .stage-meta:hover { opacity: 1; }
+  .stage-meta b { color: var(--fg); font-weight: 600; }
+  .hud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 12px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hud-header:hover { background: rgba(255,255,255,0.04); }
+  .hud-title {
     color: var(--accent);
     font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.18em;
-    margin-bottom: 4px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
   }
-  .stage-meta .hud-row { display: flex; justify-content: space-between; gap: 10px; }
-  .stage-meta .hud-key { color: var(--muted); }
-  .stage-meta .hud-val { color: var(--fg); font-weight: 600; }
+  .hud-chevron {
+    color: var(--muted);
+    font: 600 11px/1 ui-monospace, monospace;
+    transition: transform 200ms;
+  }
+  .stage-meta.expanded .hud-chevron { transform: rotate(180deg); }
+  .hud-body {
+    display: none;
+    padding: 4px 12px 10px;
+    font-size: 10px;
+    border-top: 1px solid var(--line);
+    min-width: 170px;
+  }
+  .stage-meta.expanded { opacity: 1; }
+  .stage-meta.expanded .hud-body { display: block; }
+  .hud-row { display: flex; justify-content: space-between; gap: 10px; }
+  .hud-key { color: var(--muted); }
+  .hud-val { color: var(--fg); font-weight: 600; }
   .stage-controls {
     position: absolute;
     bottom: 18px;
@@ -753,7 +774,7 @@
 <main>
   <aside>
     <img class="brand-logo" src="arena-logo.png" alt="ARENA">
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.23</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.24</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -946,17 +967,22 @@
       <g id="root"></g>
     </svg>
     <div class="screensaver-banner" id="ssBanner">Screensaver · <span id="ssBannerName">—</span></div>
-    <div class="stage-meta">
-      <div class="hud-title" id="meta-mood">CANONICAL</div>
-      <div class="hud-row"><span class="hud-key">Rings</span><span class="hud-val" id="meta-N">4</span></div>
-      <div class="hud-row"><span class="hud-key">Echo</span><span class="hud-val" id="meta-echo">CENTER</span></div>
-      <div class="hud-row"><span class="hud-key">Scale</span><span class="hud-val" id="meta-scale">2.0</span></div>
-      <div class="hud-row"><span class="hud-key">Rotation</span><span class="hud-val" id="meta-rot">0°</span></div>
-      <div class="hud-row"><span class="hud-key">Profile</span><span class="hud-val" id="meta-profile">UNIFORM</span></div>
-      <div class="hud-row"><span class="hud-key">Motion</span><span class="hud-val" id="meta-motion">STATIC</span></div>
-      <div class="hud-row"><span class="hud-key">State</span><span class="hud-val" id="meta-state">STATIC</span></div>
-      <div class="hud-row"><span class="hud-key">Time</span><span class="hud-val" id="meta-time">0.0s</span></div>
-      <div class="hud-row" style="margin-top:6px;opacity:0.45"><span class="hud-key">Build</span><span class="hud-val">v1.23</span></div>
+    <div class="stage-meta" id="stageMeta">
+      <div class="hud-header" id="hudToggle" title="Show / hide details">
+        <span class="hud-title" id="meta-mood">CANONICAL</span>
+        <span class="hud-chevron">▾</span>
+      </div>
+      <div class="hud-body">
+        <div class="hud-row"><span class="hud-key">Rings</span><span class="hud-val" id="meta-N">4</span></div>
+        <div class="hud-row"><span class="hud-key">Echo</span><span class="hud-val" id="meta-echo">CENTER</span></div>
+        <div class="hud-row"><span class="hud-key">Scale</span><span class="hud-val" id="meta-scale">2.0</span></div>
+        <div class="hud-row"><span class="hud-key">Rotation</span><span class="hud-val" id="meta-rot">0°</span></div>
+        <div class="hud-row"><span class="hud-key">Profile</span><span class="hud-val" id="meta-profile">UNIFORM</span></div>
+        <div class="hud-row"><span class="hud-key">Motion</span><span class="hud-val" id="meta-motion">STATIC</span></div>
+        <div class="hud-row"><span class="hud-key">State</span><span class="hud-val" id="meta-state">STATIC</span></div>
+        <div class="hud-row"><span class="hud-key">Time</span><span class="hud-val" id="meta-time">0.0s</span></div>
+        <div class="hud-row" style="margin-top:6px;opacity:0.45"><span class="hud-key">Build</span><span class="hud-val">v1.24</span></div>
+      </div>
     </div>
     <div class="stage-controls">
       <button class="btn primary" id="stageRandomize" title="Re-roll (respects active mode)">↻ Randomize</button>
@@ -1605,6 +1631,12 @@
   });
   // Auto-collapse on small viewports at first load.
   if (window.innerWidth <= 760) setDrawerCollapsed(true);
+
+  // HUD info card: discreet by default (just the mood pill). Click the header
+  // to expand and reveal the full state breakdown. Click again to collapse.
+  $("hudToggle").addEventListener("click", () => {
+    $("stageMeta").classList.toggle("expanded");
+  });
   // When format changes while CENTERED or ROTATED is active, re-apply the mode
   // so the composition re-derives bH/by/gy from the new aspect ratio. Without
   // this, a CENTERED 16:9 composition keeps its wide rings even after switching
