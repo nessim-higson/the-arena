@@ -94,7 +94,7 @@
       width: 44px;
       height: 60px;
       font-size: 22px;
-      top: 50%;
+      top: 28%;
       left: min(86vw, 360px);
       transform: translate(-50%, -50%);
     }
@@ -630,11 +630,78 @@
   }
   .stage-controls .btn { padding: 9px 14px; font-size: 10px; }
   .stage-controls .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .stage-controls .btn.thumb-up:hover { background: #2bb158; color: #fff; border-color: #2bb158; }
+  .stage-controls .btn.thumb-down:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   .stage-controls .divider {
     width: 1px;
     background: var(--line);
     margin: 0 2px;
   }
+  /* feedback modal: overlays the canvas, lets the user attach a note + the
+     current state JSON, then copy the whole thing to clipboard */
+  .feedback-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .feedback-modal.open { display: flex; }
+  .feedback-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    width: min(520px, 100%);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 14px;
+  }
+  .feedback-card h2 {
+    margin: 0;
+    font: 700 14px/1.2 ui-monospace, monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .feedback-card h2 .face { font-size: 18px; margin-right: 8px; }
+  .feedback-card h2.up .face   { color: #2bb158; }
+  .feedback-card h2.down .face { color: var(--accent); }
+  .feedback-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .feedback-card textarea {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--fg);
+    padding: 10px 12px;
+    font: 12px/1.5 ui-monospace, monospace;
+    min-height: 90px;
+    resize: vertical;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .feedback-card textarea:focus { outline: none; border-color: var(--accent); }
+  .feedback-card .config-preview {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    font: 10px/1.5 ui-monospace, monospace;
+    color: var(--muted);
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  .feedback-card .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .feedback-card .actions .btn { min-width: 80px; }
   .toast {
     position: fixed;
     top: 20px;
@@ -671,7 +738,7 @@
 <main>
   <aside>
     <img class="brand-logo" src="arena-logo.png" alt="ARENA">
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.22</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.23</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -874,7 +941,7 @@
       <div class="hud-row"><span class="hud-key">Motion</span><span class="hud-val" id="meta-motion">STATIC</span></div>
       <div class="hud-row"><span class="hud-key">State</span><span class="hud-val" id="meta-state">STATIC</span></div>
       <div class="hud-row"><span class="hud-key">Time</span><span class="hud-val" id="meta-time">0.0s</span></div>
-      <div class="hud-row" style="margin-top:6px;opacity:0.45"><span class="hud-key">Build</span><span class="hud-val">v1.22</span></div>
+      <div class="hud-row" style="margin-top:6px;opacity:0.45"><span class="hud-key">Build</span><span class="hud-val">v1.23</span></div>
     </div>
     <div class="stage-controls">
       <button class="btn primary" id="stageRandomize" title="Re-roll (respects active mode)">↻ Randomize</button>
@@ -883,9 +950,24 @@
       <button class="btn" id="snap">Freeze</button>
       <div class="divider"></div>
       <button class="btn" id="stageDownloadPNG" title="Download current frame as PNG">↓ PNG</button>
+      <div class="divider"></div>
+      <button class="btn thumb-up" id="thumbUp" title="This one works — open feedback form">👍</button>
+      <button class="btn thumb-down" id="thumbDown" title="This one doesn't — open feedback form">👎</button>
     </div>
   </section>
 </main>
+<div class="feedback-modal" id="feedbackModal" role="dialog" aria-modal="true">
+  <div class="feedback-card">
+    <h2 id="feedbackTitle"><span class="face">👍</span><span id="feedbackHeading">What's working?</span></h2>
+    <p>Add a quick note about what feels right or wrong about this composition. The current state will be attached automatically.</p>
+    <textarea id="feedbackNotes" placeholder="e.g. love this rhythm but motion feels too fast / rotation too aggressive at this density"></textarea>
+    <div class="config-preview" id="feedbackPreview"></div>
+    <div class="actions">
+      <button class="btn" id="feedbackCancel">Cancel</button>
+      <button class="btn primary" id="feedbackCopy">Copy to clipboard</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast">READY</div>
 
@@ -1508,25 +1590,35 @@
   });
   // Auto-collapse on small viewports at first load.
   if (window.innerWidth <= 760) setDrawerCollapsed(true);
+  // When format changes while CENTERED or ROTATED is active, re-apply the mode
+  // so the composition re-derives bH/by/gy from the new aspect ratio. Without
+  // this, a CENTERED 16:9 composition keeps its wide rings even after switching
+  // to 9:16, leaving big empty bands top + bottom.
+  function refitForFormat() {
+    applyFormat();
+    const mode = state.currentMode;
+    if (mode === "CENTERED" || mode === "ROTATED") {
+      applyMoodFully(mode);
+    } else {
+      render();
+    }
+  }
   // Scoped to #formatGrid — otherwise this handler also fires on Band Profile
   // buttons (same class) and sets fW/fH to NaN, which then breaks the canvas.
   document.querySelectorAll("#formatGrid .format-btn").forEach(b => {
     b.addEventListener("click", () => {
       state.fW = +b.dataset.width;
       state.fH = +b.dataset.height;
-      applyFormat();
-      render();
+      refitForFormat();
     });
   });
   $("fW").addEventListener("input", () => {
     state.fW = parseInt($("fW").value);
-    applyFormat();
-    render();
+    refitForFormat();
   });
   $("fH").addEventListener("input", () => {
     state.fH = parseInt($("fH").value);
-    applyFormat();
-    render();
+    refitForFormat();
   });
 
   // ─── band profile
@@ -1773,8 +1865,8 @@
 
   // Config capture: copy the full state as readable JSON so the user can paste
   // it into chat with notes ("this composition feels wrong because…").
-  $("copyConfig").addEventListener("click", async () => {
-    const cfg = {
+  function buildConfigSnapshot() {
+    return {
       version: $("buildVersion").textContent,
       lastMood: state.lastMood || null,
       currentMode: state.currentMode || null,
@@ -1799,9 +1891,52 @@
       ])),
       shareURL: location.href,
     };
-    const json = JSON.stringify(cfg, null, 2);
+  }
+  $("copyConfig").addEventListener("click", async () => {
+    const json = JSON.stringify(buildConfigSnapshot(), null, 2);
     try { await navigator.clipboard.writeText(json); toast("CONFIG COPIED"); }
     catch (e) { toast("COPY FAILED"); console.log(json); }
+  });
+
+  // Feedback modal: 👍/👎 buttons open a small form with the current config
+  // attached. Submitting copies a structured note (verdict + notes + JSON) to
+  // the clipboard so the user can paste it directly into chat.
+  let feedbackKind = "up";
+  function openFeedback(kind) {
+    feedbackKind = kind;
+    const heading = $("feedbackTitle");
+    heading.classList.toggle("up", kind === "up");
+    heading.classList.toggle("down", kind === "down");
+    heading.querySelector(".face").textContent = kind === "up" ? "👍" : "👎";
+    $("feedbackHeading").textContent = kind === "up" ? "What's working?" : "What's not working?";
+    $("feedbackPreview").textContent = JSON.stringify(buildConfigSnapshot(), null, 2);
+    $("feedbackNotes").value = "";
+    $("feedbackModal").classList.add("open");
+    setTimeout(() => $("feedbackNotes").focus(), 60);
+  }
+  function closeFeedback() { $("feedbackModal").classList.remove("open"); }
+  $("thumbUp").addEventListener("click", () => openFeedback("up"));
+  $("thumbDown").addEventListener("click", () => openFeedback("down"));
+  $("feedbackCancel").addEventListener("click", closeFeedback);
+  $("feedbackModal").addEventListener("click", (e) => {
+    if (e.target === $("feedbackModal")) closeFeedback();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("feedbackModal").classList.contains("open")) closeFeedback();
+  });
+  $("feedbackCopy").addEventListener("click", async () => {
+    const verdict = feedbackKind === "up" ? "👍 WORKING" : "👎 NOT WORKING";
+    const note = $("feedbackNotes").value.trim() || "(no note)";
+    const json = JSON.stringify(buildConfigSnapshot(), null, 2);
+    const text = `${verdict}\n\nNote:\n${note}\n\nConfig:\n${json}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(feedbackKind === "up" ? "👍 COPIED" : "👎 COPIED");
+      closeFeedback();
+    } catch (e) {
+      toast("COPY FAILED");
+      console.log(text);
+    }
   });
 
   // ─── URL state
@@ -2495,11 +2630,15 @@
       // ratio = (α·c − s) / (c − α·s). Collapses to α when rotation is 0.
       let targetAspect = canvasAspect;
       const denom = c - canvasAspect * s;
-      if (denom > 0.001) {
-        targetAspect = (canvasAspect * c - s) / denom;
+      const num = canvasAspect * c - s;
+      if (denom > 0.001 && num > 0.001) {
+        targetAspect = num / denom;
       }
-      // Floor at 1.05 so we don't go upright/portrait at extreme rotations.
-      targetAspect = Math.max(1.05, targetAspect);
+      // Safety clamp: reject non-finite/negative results (fall back to canvasAspect),
+      // then clamp to a sane band so we don't end up with 50:1 needles. Allows
+      // portrait (canvasAspect < 1) — previously this was wrongly floored at 1.05.
+      if (!isFinite(targetAspect) || targetAspect <= 0.05) targetAspect = canvasAspect;
+      targetAspect = Math.max(0.2, Math.min(5, targetAspect));
       const invAspect = 1 / targetAspect;
       state.bH = Math.max(20, Math.round(state.bW * invAspect));
       state.by = +(state.bx * invAspect).toFixed(2);
