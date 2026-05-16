@@ -115,7 +115,22 @@
     input[type=range] { height: 28px; }
     input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -9px; }
     .stage-meta { font-size: 8px; }
-    .stage-controls { bottom: 12px; }
+    /* The stage action bar was overflowing the viewport on phones (375px wide).
+       Let it wrap, shrink padding, hide the dividers, and constrain max-width
+       so every button stays inside the screen. */
+    .stage-controls {
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 16px);
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    .stage-controls .btn { padding: 8px 9px; font-size: 10px; min-height: 36px; }
+    .stage-controls .divider { display: none; }
   }
   .brand {
     font: 600 11px/1 ui-monospace, monospace;
