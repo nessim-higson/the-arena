@@ -31,12 +31,89 @@
     display: grid;
     grid-template-columns: 340px 1fr;
     height: 100vh;
+    transition: grid-template-columns 240ms cubic-bezier(.2,.7,.3,1);
+  }
+  body.drawer-collapsed main {
+    grid-template-columns: 0 1fr;
+  }
+  body.drawer-collapsed aside {
+    transform: translateX(-100%);
   }
   aside {
     border-right: 1px solid var(--line);
     overflow-y: auto;
     padding: 16px 18px;
     background: var(--panel);
+    position: relative;
+    transition: transform 240ms cubic-bezier(.2,.7,.3,1);
+  }
+  /* drawer toggle: pinned to the right of the drawer; when collapsed it floats
+     at the top-left of the canvas as a "show controls" handle */
+  .drawer-toggle {
+    position: fixed;
+    top: 12px;
+    left: 340px;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--fg);
+    cursor: pointer;
+    font: 600 12px/1 ui-monospace, monospace;
+    z-index: 50;
+    transition: left 240ms cubic-bezier(.2,.7,.3,1), background 120ms;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .drawer-toggle:hover { background: var(--accent); color: var(--bg); }
+  body.drawer-collapsed .drawer-toggle {
+    left: 12px;
+    transform: translateX(0);
+  }
+  /* Mobile: drawer becomes a slide-in overlay, touch targets get bigger */
+  @media (max-width: 760px) {
+    main {
+      grid-template-columns: 1fr;
+    }
+    aside {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: min(86vw, 360px);
+      z-index: 40;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+    }
+    body.drawer-collapsed main {
+      grid-template-columns: 1fr;
+    }
+    .drawer-toggle {
+      width: 40px;
+      height: 40px;
+      font-size: 16px;
+      top: 10px;
+      left: min(86vw, 360px);
+      transform: translateX(-50%);
+    }
+    body.drawer-collapsed .drawer-toggle { left: 10px; }
+    /* dim background when drawer is open on mobile */
+    body:not(.drawer-collapsed) #stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 30;
+      pointer-events: auto;
+    }
+    /* Bigger touch targets */
+    .header-btn { padding: 14px 6px; font-size: 11px; min-height: 44px; }
+    button.btn { padding: 11px 8px; font-size: 11px; min-height: 38px; }
+    .pos-btn, .anchor-btn { min-height: 38px; }
+    input[type=range] { height: 28px; }
+    input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -9px; }
+    .stage-meta { font-size: 8px; }
+    .stage-controls { bottom: 12px; }
   }
   .brand {
     font: 600 11px/1 ui-monospace, monospace;
@@ -46,9 +123,9 @@
   }
   .brand-logo {
     display: block;
-    width: 33%;
+    width: 50%;
     height: auto;
-    max-height: 18px;
+    max-height: 28px;
     object-fit: contain;
     margin: 0 auto 14px;
   }
@@ -557,10 +634,11 @@
 </style>
 </head>
 <body>
+<button class="drawer-toggle" id="drawerToggle" aria-label="Toggle controls drawer" title="Toggle controls">‹</button>
 <main>
   <aside>
     <img class="brand-logo" src="arena-logo.png" alt="ARENA">
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.20</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.21</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -1359,6 +1437,27 @@
   }
 
   window.addEventListener("resize", fitCanvas);
+
+  // ─── Drawer toggle (desktop = slide off, mobile = overlay)
+  function setDrawerCollapsed(collapsed) {
+    document.body.classList.toggle("drawer-collapsed", collapsed);
+    $("drawerToggle").textContent = collapsed ? "›" : "‹";
+    // Recompute canvas fit after grid transition completes.
+    setTimeout(fitCanvas, 260);
+  }
+  $("drawerToggle").addEventListener("click", () => {
+    setDrawerCollapsed(!document.body.classList.contains("drawer-collapsed"));
+  });
+  // On mobile, also close the drawer when tapping on the canvas backdrop.
+  $("stage").addEventListener("click", (e) => {
+    if (window.innerWidth > 760) return;
+    if (document.body.classList.contains("drawer-collapsed")) return;
+    // only close when the click is on the dimmed backdrop (not on a stage control)
+    if (e.target.closest(".stage-controls")) return;
+    setDrawerCollapsed(true);
+  });
+  // Auto-collapse on small viewports at first load.
+  if (window.innerWidth <= 760) setDrawerCollapsed(true);
   // Scoped to #formatGrid — otherwise this handler also fires on Band Profile
   // buttons (same class) and sets fW/fH to NaN, which then breaks the canvas.
   document.querySelectorAll("#formatGrid .format-btn").forEach(b => {
@@ -2120,8 +2219,11 @@
       positions: "center-heavy",
       fitMode: "TIGHT",
       lockRotation: true,
-      anchorCentered: true,        // force ahx=ahy=0 (no drift) — fills the frame
-      anchorCenterPosition: true,  // pin px=py=0.5 so TIGHT can fill both edges
+      // anchorRange + autoCompensatePos: pick a random anchor offset in this range and
+      // set px = 0.5 − ahx, py = 0.5 − ahy. The compensation keeps the composition
+      // filling the entire viewport even when echo-from is offset (corner, edge, etc.).
+      anchorRange: [-0.5, 0.5],
+      autoCompensatePos: true,
       fillViewport: true,          // lock outer-ring aspect to canvas aspect
       motions: ["BREATH", "MORPH PULSE"]
     },
@@ -2135,8 +2237,10 @@
       positions: "center-heavy",
       fitMode: "TIGHT",
       rotRange: [12, 22],   // capped: above ~22° a 16:9 outer ring can't fill both axes
-      anchorCentered: true,
-      anchorCenterPosition: true,
+      // Rotated has narrower anchor range — large anchor offsets combined with rotation
+      // make the composition feel unbalanced.
+      anchorRange: [-0.35, 0.35],
+      autoCompensatePos: true,
       fillViewport: true,
       motions: ["TILT", "BREATH", "MORPH PULSE"]
     },
@@ -2281,20 +2385,28 @@
       state.py = jitter(e.py, 0.12);
       state.ahx = Math.max(-0.5, Math.min(0.5, jitter(e.ahx, 0.18)));
       state.ahy = Math.max(-0.5, Math.min(0.5, jitter(e.ahy, 0.18)));
-    } else {
-      if (mood.anchorCenterPosition) {
-        state.px = 0.5;
-        state.py = 0.5;
-      } else {
-        const pos = pickPosition(mood.positions);
-        state.px = pos[0];
-        state.py = pos[1];
-      }
-      if (mood.anchorCentered) {
-        // Force true center anchor — no drift — so TIGHT can fill the frame.
+    } else if (mood.autoCompensatePos) {
+      // Echo-from variety while still filling the viewport. Pick a random anchor
+      // offset within the mood's allowed range, then compensate position so the
+      // composition's bounding box covers the whole canvas (TIGHT fits to both edges).
+      const [lo, hi] = mood.anchorRange || [-0.5, 0.5];
+      // Bias slightly toward center so we don't ONLY produce corner echoes —
+      // half the time use center anchor, half the time use a real offset.
+      if (Math.random() < 0.4) {
         state.ahx = 0;
         state.ahy = 0;
-      } else if (Math.random() < 0.40) {
+      } else {
+        state.ahx = +rand(lo, hi).toFixed(3);
+        state.ahy = +rand(lo, hi).toFixed(3);
+      }
+      state.px = +(0.5 - state.ahx).toFixed(3);
+      state.py = +(0.5 - state.ahy).toFixed(3);
+    } else {
+      const pos = pickPosition(mood.positions);
+      state.px = pos[0];
+      state.py = pos[1];
+      // Bumped from 18% → 40% so center-style moods often pick non-center anchor too
+      if (Math.random() < 0.40) {
         state.ahx = jitter(0, 0.50);  // ±0.25 around 0 — gentle drift
         state.ahy = jitter(0, 0.50);
       } else {
@@ -2392,8 +2504,26 @@
       applyMoodFully();
     }
   });
-  $("modeCentered").addEventListener("click", () => { setCurrentMode("CENTERED"); applyMoodFully("CENTERED"); });
-  $("modeRotated").addEventListener("click", () => { setCurrentMode("ROTATED"); applyMoodFully("ROTATED"); });
+  // Toggle behavior: clicking an already-active mode button deactivates it (without
+  // changing the current composition). Next Randomize will then pick from full spectrum.
+  $("modeCentered").addEventListener("click", () => {
+    if (state.currentMode === "CENTERED") {
+      setCurrentMode(null);
+      toast("CENTERED OFF");
+    } else {
+      setCurrentMode("CENTERED");
+      applyMoodFully("CENTERED");
+    }
+  });
+  $("modeRotated").addEventListener("click", () => {
+    if (state.currentMode === "ROTATED") {
+      setCurrentMode(null);
+      toast("ROTATED OFF");
+    } else {
+      setCurrentMode("ROTATED");
+      applyMoodFully("ROTATED");
+    }
+  });
 
   // ─── Mood grid (every named mood as a clickable preset)
   function buildMoodGrid() {
