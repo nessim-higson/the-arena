@@ -31,7 +31,7 @@
     display: grid;
     grid-template-columns: 340px 1fr;
     height: 100vh;
-    transition: grid-template-columns 240ms cubic-bezier(.2,.7,.3,1);
+    transition: grid-template-columns 380ms cubic-bezier(.4,.0,.2,1);
   }
   body.drawer-collapsed main {
     grid-template-columns: 0 1fr;
@@ -45,33 +45,35 @@
     padding: 16px 18px;
     background: var(--panel);
     position: relative;
-    transition: transform 240ms cubic-bezier(.2,.7,.3,1);
+    transition: transform 380ms cubic-bezier(.4,.0,.2,1);
   }
-  /* drawer toggle: pinned to the right of the drawer; when collapsed it floats
-     at the top-left of the canvas as a "show controls" handle */
+  /* drawer toggle: sits flush against the right edge of the drawer.
+     Large, high-contrast, with a clear chevron. */
   .drawer-toggle {
     position: fixed;
-    top: 12px;
+    top: 50%;
     left: 340px;
-    transform: translateX(-50%);
-    width: 26px;
-    height: 26px;
+    transform: translate(-50%, -50%);
+    width: 38px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--panel);
     border: 1px solid var(--line);
+    border-radius: 0 8px 8px 0;
     color: var(--fg);
     cursor: pointer;
-    font: 600 12px/1 ui-monospace, monospace;
+    font: 700 22px/1 ui-monospace, monospace;
     z-index: 50;
-    transition: left 240ms cubic-bezier(.2,.7,.3,1), background 120ms;
+    transition: left 380ms cubic-bezier(.4,.0,.2,1), background 120ms, color 120ms, box-shadow 120ms;
     -webkit-tap-highlight-color: transparent;
+    box-shadow: 2px 0 6px rgba(0,0,0,0.4);
   }
-  .drawer-toggle:hover { background: var(--accent); color: var(--bg); }
+  .drawer-toggle:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   body.drawer-collapsed .drawer-toggle {
-    left: 12px;
-    transform: translateX(0);
+    left: 0;
+    transform: translate(0, -50%);
   }
   /* Mobile: drawer becomes a slide-in overlay, touch targets get bigger */
   @media (max-width: 760px) {
@@ -89,14 +91,14 @@
       grid-template-columns: 1fr;
     }
     .drawer-toggle {
-      width: 40px;
-      height: 40px;
-      font-size: 16px;
-      top: 10px;
+      width: 44px;
+      height: 60px;
+      font-size: 22px;
+      top: 50%;
       left: min(86vw, 360px);
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
     }
-    body.drawer-collapsed .drawer-toggle { left: 10px; }
+    body.drawer-collapsed .drawer-toggle { left: 0; transform: translate(0, -50%); }
     /* dim background when drawer is open on mobile */
     body:not(.drawer-collapsed) #stage::before {
       content: "";
@@ -123,11 +125,12 @@
   }
   .brand-logo {
     display: block;
-    width: 50%;
+    width: 60%;
     height: auto;
-    max-height: 28px;
+    max-height: 34px;
     object-fit: contain;
-    margin: 0 auto 14px;
+    padding: 6px 0;
+    margin: 0 auto 16px;
   }
   .sub {
     color: var(--muted);
@@ -589,6 +592,28 @@
     pointer-events: none;
   }
   .stage-meta b { color: var(--fg); font-weight: 600; }
+  /* HUD card: shows mood, key params, motion state. Higher contrast + readable size. */
+  .stage-meta {
+    background: rgba(0,0,0,0.55);
+    border: 1px solid var(--line);
+    padding: 10px 14px;
+    line-height: 1.55;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    min-width: 180px;
+  }
+  .stage-meta .hud-title {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    margin-bottom: 4px;
+  }
+  .stage-meta .hud-row { display: flex; justify-content: space-between; gap: 10px; }
+  .stage-meta .hud-key { color: var(--muted); }
+  .stage-meta .hud-val { color: var(--fg); font-weight: 600; }
   .stage-controls {
     position: absolute;
     bottom: 18px;
@@ -597,11 +622,19 @@
     display: flex;
     gap: 6px;
     z-index: 2;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.55);
     border: 1px solid var(--line);
-    padding: 6px;
+    padding: 8px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
-  .stage-controls .btn { padding: 6px 10px; font-size: 9px; }
+  .stage-controls .btn { padding: 9px 14px; font-size: 10px; }
+  .stage-controls .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .stage-controls .divider {
+    width: 1px;
+    background: var(--line);
+    margin: 0 2px;
+  }
   .toast {
     position: fixed;
     top: 20px;
@@ -638,7 +671,7 @@
 <main>
   <aside>
     <img class="brand-logo" src="arena-logo.png" alt="ARENA">
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.21</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.22</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -832,15 +865,24 @@
     </svg>
     <div class="screensaver-banner" id="ssBanner">Screensaver · <span id="ssBannerName">—</span></div>
     <div class="stage-meta">
-      <b id="meta-N">22</b> RINGS<br>
-      ECHO <b id="meta-echo">CENTER</b><br>
-      <b id="meta-time">0.0s</b><br>
-      <b id="meta-state">STATIC</b><br>
-      <span style="opacity:0.45">BUILD v1.18</span>
+      <div class="hud-title" id="meta-mood">CANONICAL</div>
+      <div class="hud-row"><span class="hud-key">Rings</span><span class="hud-val" id="meta-N">4</span></div>
+      <div class="hud-row"><span class="hud-key">Echo</span><span class="hud-val" id="meta-echo">CENTER</span></div>
+      <div class="hud-row"><span class="hud-key">Scale</span><span class="hud-val" id="meta-scale">2.0</span></div>
+      <div class="hud-row"><span class="hud-key">Rotation</span><span class="hud-val" id="meta-rot">0°</span></div>
+      <div class="hud-row"><span class="hud-key">Profile</span><span class="hud-val" id="meta-profile">UNIFORM</span></div>
+      <div class="hud-row"><span class="hud-key">Motion</span><span class="hud-val" id="meta-motion">STATIC</span></div>
+      <div class="hud-row"><span class="hud-key">State</span><span class="hud-val" id="meta-state">STATIC</span></div>
+      <div class="hud-row"><span class="hud-key">Time</span><span class="hud-val" id="meta-time">0.0s</span></div>
+      <div class="hud-row" style="margin-top:6px;opacity:0.45"><span class="hud-key">Build</span><span class="hud-val">v1.22</span></div>
     </div>
     <div class="stage-controls">
-      <button class="btn" id="playPause">▶ Play Motion</button>
+      <button class="btn primary" id="stageRandomize" title="Re-roll (respects active mode)">↻ Randomize</button>
+      <div class="divider"></div>
+      <button class="btn" id="playPause">▶ Play</button>
       <button class="btn" id="snap">Freeze</button>
+      <div class="divider"></div>
+      <button class="btn" id="stageDownloadPNG" title="Download current frame as PNG">↓ PNG</button>
     </div>
   </section>
 </main>
@@ -1283,6 +1325,14 @@
     $("meta-time").textContent = state.timeAccum.toFixed(1) + "s";
     $("meta-state").textContent = state.playing ? (state.screensaver ? "AUTO" : "MOTION") : "STATIC";
     if ($("meta-echo")) $("meta-echo").textContent = describeAnchor(state.ahx, state.ahy);
+    if ($("meta-mood")) $("meta-mood").textContent = state.currentMode || state.lastMood || "CANONICAL";
+    if ($("meta-scale")) $("meta-scale").textContent = state.scale.toFixed(2);
+    if ($("meta-rot")) $("meta-rot").textContent = Math.round(state.rot) + "°";
+    if ($("meta-profile")) $("meta-profile").textContent = state.bandProfile || "UNIFORM";
+    if ($("meta-motion")) {
+      const active = Object.entries(state.motion).filter(([_, m]) => m.on).map(([k]) => k.toUpperCase());
+      $("meta-motion").textContent = active.length === 0 ? "OFF" : (active.length <= 2 ? active.join("+") : active.length + " ACTIVE");
+    }
     $("ssBanner").classList.toggle("on", state.screensaver);
     $("ssBannerName").textContent = SS_STATES[state.ssStateIdx].name;
 
@@ -2225,24 +2275,26 @@
       anchorRange: [-0.5, 0.5],
       autoCompensatePos: true,
       fillViewport: true,          // lock outer-ring aspect to canvas aspect
-      motions: ["BREATH", "MORPH PULSE"]
+      // Broad motion palette so re-rolling within CENTERED produces clearly different
+      // animation feels: pure pulse, pulse + ripple, wobble, full engine, etc.
+      motions: ["BREATH", "MORPH PULSE", "CASCADE", "COUNTER", "DRIFT", "GROW", "SHIFT WEAVE", "TILT + BREATH", "FULL ENGINE"]
     },
     {
       name: "ROTATED",
       weight: 0.05,
-      N: [8, 22],
-      bx: [3, 14], by: [10, 30], gx: [22, 90], gy: [10, 36],
-      scale: [6, 10],
+      // Rotated reworked: bold tilt + scale large enough that the outermost rings
+      // genuinely break the viewport. Communicates motion-out-of-frame instead of
+      // a confined diorama. No fillViewport / no TIGHT clamp.
+      N: [10, 28],
+      bx: [4, 12], by: [12, 28], gx: [28, 80], gy: [12, 32],
+      scale: [3.5, 6.5],
       anchorAspect: "wide-or-canonical",
       positions: "center-heavy",
-      fitMode: "TIGHT",
-      rotRange: [12, 22],   // capped: above ~22° a 16:9 outer ring can't fill both axes
-      // Rotated has narrower anchor range — large anchor offsets combined with rotation
-      // make the composition feel unbalanced.
-      anchorRange: [-0.35, 0.35],
-      autoCompensatePos: true,
-      fillViewport: true,
-      motions: ["TILT", "BREATH", "MORPH PULSE"]
+      fitMode: "LOOSE",        // rings extend beyond the canvas
+      rotRange: [22, 55],      // stronger, more dynamic tilts
+      anchorRange: [-0.3, 0.3],
+      autoCompensatePos: true, // still keep visual balance — anchor + position pair
+      motions: ["TILT", "TILT + BREATH", "FULL ENGINE", "CASCADE", "SHIFT WEAVE", "DRIFT"]
     },
     {
       name: "EXPLOSION",
@@ -2495,7 +2547,7 @@
   //  - ROTATED active  → re-rolls a new ROTATED variation
   //  - neither active  → picks any mood at random
   // This makes "Randomize" feel like "give me another one of these" once a mode is locked.
-  $("randomizeAll").addEventListener("click", () => {
+  function randomizeRespectingMode() {
     const mode = state.currentMode;
     if (mode === "CENTERED" || mode === "ROTATED") {
       applyMoodFully(mode);
@@ -2503,7 +2555,12 @@
       setCurrentMode(null);
       applyMoodFully();
     }
-  });
+  }
+  $("randomizeAll").addEventListener("click", randomizeRespectingMode);
+  // Mirror Randomize + PNG export buttons on the canvas itself so users don't
+  // need to open the drawer to access the two most common actions.
+  $("stageRandomize").addEventListener("click", randomizeRespectingMode);
+  $("stageDownloadPNG").addEventListener("click", () => $("downloadPNG").click());
   // Toggle behavior: clicking an already-active mode button deactivates it (without
   // changing the current composition). Next Randomize will then pick from full spectrum.
   $("modeCentered").addEventListener("click", () => {
