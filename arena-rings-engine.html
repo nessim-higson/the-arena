@@ -46,11 +46,11 @@
   }
   .brand-logo {
     display: block;
-    width: 100%;
+    width: 33%;
     height: auto;
-    max-height: 32px;
+    max-height: 18px;
     object-fit: contain;
-    margin: 0 0 10px;
+    margin: 0 auto 14px;
   }
   .sub {
     color: var(--muted);
@@ -560,7 +560,7 @@
 <main>
   <aside>
     <img class="brand-logo" src="arena-logo.png" alt="ARENA">
-    <div class="sub">Ring Engine · <span id="buildVersion">v1.19</span> · <span id="buildDate">16 MAY 2026</span></div>
+    <div class="sub">Ring Engine · <span id="buildVersion">v1.20</span> · <span id="buildDate">16 MAY 2026</span></div>
     <div class="header-actions">
       <button class="header-btn" id="goCanonical">↩ Canonical</button>
       <button class="header-btn primary" id="randomizeAll">↻ Randomize</button>
@@ -733,8 +733,8 @@
     <fieldset class="collapsible collapsed">
       <legend>Export</legend>
       <div class="btnrow">
-        <button class="btn" id="downloadPNG">Download PNG</button>
-        <button class="btn primary" id="downloadSVG">Download SVG</button>
+        <button class="btn primary" id="downloadPNG">Download PNG</button>
+        <button class="btn" id="downloadSVG">Download SVG</button>
       </div>
       <div class="btnrow" style="margin-top:6px">
         <button class="btn" id="copySVG">Copy SVG</button>
@@ -2374,12 +2374,24 @@
     applySSStateInstant(idx >= 0 ? idx : 0);
     if (!state.playing) togglePlay();
     syncLockRot();
-    expandStackSection();
     render();
     toast(mood.name);
     return mood;
   }
-  $("randomizeAll").addEventListener("click", () => { setCurrentMode(null); applyMoodFully(); });
+  // Randomize respects the currently-active mode:
+  //  - CENTERED active → re-rolls a new CENTERED variation
+  //  - ROTATED active  → re-rolls a new ROTATED variation
+  //  - neither active  → picks any mood at random
+  // This makes "Randomize" feel like "give me another one of these" once a mode is locked.
+  $("randomizeAll").addEventListener("click", () => {
+    const mode = state.currentMode;
+    if (mode === "CENTERED" || mode === "ROTATED") {
+      applyMoodFully(mode);
+    } else {
+      setCurrentMode(null);
+      applyMoodFully();
+    }
+  });
   $("modeCentered").addEventListener("click", () => { setCurrentMode("CENTERED"); applyMoodFully("CENTERED"); });
   $("modeRotated").addEventListener("click", () => { setCurrentMode("ROTATED"); applyMoodFully("ROTATED"); });
 
